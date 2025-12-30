@@ -17,6 +17,11 @@ set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "Disable Arrow CLI utilities" FORCE)
 set(ARROW_SIMD_LEVEL "NONE" CACHE STRING "Disable Arrow SIMD to ease portability" FORCE)
 set(ARROW_RUNTIME_SIMD_LEVEL "NONE" CACHE STRING "Disable runtime SIMD dispatch" FORCE)
 
+set(YATPCHGEN_ARROW_INCLUDE_DIRS
+    "${YATPCHGEN_ARROW_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/arrow-build/src"
+    CACHE INTERNAL "Arrow include directories used by yatpchgen" FORCE)
+
 add_subdirectory(
   "${YATPCHGEN_ARROW_SOURCE_DIR}"
   "${CMAKE_CURRENT_BINARY_DIR}/arrow-build"

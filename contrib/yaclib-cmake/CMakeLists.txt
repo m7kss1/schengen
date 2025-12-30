@@ -15,6 +15,11 @@ add_subdirectory(
   "${CMAKE_CURRENT_BINARY_DIR}/yaclib-build"
 )
 
+set(YATPCHGEN_YACLIB_INCLUDE_DIRS
+    "${YATPCHGEN_YACLIB_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_BINARY_DIR}/yaclib-build/include"
+    CACHE INTERNAL "YACLib include directories used by yatpchgen" FORCE)
+
 if (TARGET yaclib)
   add_library(yatpchgen::yaclib ALIAS yaclib)
 endif ()

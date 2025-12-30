@@ -1,9 +1,6 @@
 [submodule "contrib/arrow"]
 	path = contrib/arrow
 	url = git@github.com:apache/arrow.git
-[submodule "contrib/folly"]
-	path = contrib/folly
-	url = git@github.com:facebook/folly.git
 [submodule "contrib/yaclib"]
 	path = contrib/yaclib
 	url = git@github.com:YACLib/YACLib.git
