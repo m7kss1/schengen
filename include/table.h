@@ -53,10 +53,10 @@ private:
     std::unique_ptr<BuilderType> builder_;
 };
 
-class VarcharColumn
+class VarcharColumnBuilder
 {
 public:
-    explicit VarcharColumn(arrow::MemoryPool * pool)
+    explicit VarcharColumnBuilder(arrow::MemoryPool * pool)
         : builder_(std::make_unique<arrow::StringBuilder>(pool))
     {
     }
@@ -93,7 +93,7 @@ public:
         return NumericColumnBuilder<T>(pool_);
     }
 
-    VarcharColumn CreateVarchar() const { return VarcharColumn(pool_); }
+    VarcharColumnBuilder CreateVarchar() const { return VarcharColumn(pool_); }
 
     arrow::MemoryPool * pool() const { return pool_; }
 
@@ -115,8 +115,8 @@ class CustomerColumns : public ColumnSetBase
 {
 public:
     NumericColumnBuilder<arrow::Int32Type> c_custkey;
-    VarcharColumn c_name;
-    VarcharColumn c_address;
+    VarcharColumnBuilder c_name;
+    VarcharColumnBuilder c_address;
     NumericColumnBuilder<arrow::Int32Type> c_nationkey;
     NumericColumnBuilder<arrow::DoubleType> c_acctbal;
 
@@ -137,13 +137,13 @@ class OrdersColumns : public ColumnSetBase
 public:
     NumericColumnBuilder<arrow::Int32Type> o_orderkey;
     NumericColumnBuilder<arrow::Int32Type> o_custkey;
-    VarcharColumn o_orderstatus;
+    VarcharColumnBuilder o_orderstatus;
     NumericColumnBuilder<arrow::DoubleType> o_totalprice;
     NumericColumnBuilder<arrow::Date32Type> o_orderdate;
-    VarcharColumn o_orderpriority;
-    VarcharColumn o_clerk;
+    VarcharColumnBuilder o_orderpriority;
+    VarcharColumnBuilder o_clerk;
     NumericColumnBuilder<arrow::Int32Type> o_shippriority;
-    VarcharColumn o_comment;
+    VarcharColumnBuilder o_comment;
 
     explicit OrdersColumns(const BuilderFactory & factory)
         : o_orderkey(factory.CreateNumeric<arrow::Int32Type>())
@@ -175,14 +175,14 @@ public:
     NumericColumnBuilder<arrow::DoubleType> l_extendedprice;
     NumericColumnBuilder<arrow::DoubleType> l_discount;
     NumericColumnBuilder<arrow::DoubleType> l_tax;
-    VarcharColumn l_returnflag;
-    VarcharColumn l_linestatus;
+    VarcharColumnBuilder l_returnflag;
+    VarcharColumnBuilder l_linestatus;
     NumericColumnBuilder<arrow::Date32Type> l_shipdate;
     NumericColumnBuilder<arrow::Date32Type> l_commitdate;
     NumericColumnBuilder<arrow::Date32Type> l_receiptdate;
-    VarcharColumn l_shipinstruct;
-    VarcharColumn l_shipmode;
-    VarcharColumn l_comment;
+    VarcharColumnBuilder l_shipinstruct;
+    VarcharColumnBuilder l_shipmode;
+    VarcharColumnBuilder l_comment;
 
     explicit LineitemColumns(const BuilderFactory & factory)
         : l_orderkey(factory.CreateNumeric<arrow::Int32Type>())
@@ -223,6 +223,29 @@ public:
             l_shipinstruct,
             l_shipmode,
             l_comment);
+    }
+};
+
+class RegionColumns : public ColumnSetBase
+{
+public:
+    NumericColumnBuilder<arrow::Int32Type> r_regionkey;
+    VarcharColumnBuilder r_name;
+    VarcharColumnBuilder r_comment;
+
+    explicit RegionColumns(const BuilderFactory & factory)
+        : r_regionkey(factory.CreateNumeric<arrow::Int32Type>())
+        , r_name(factory.CreateVarchar())
+        , r_comment(factory.CreateVarchar())
+    {
+    }
+
+    void ClearAll()
+    {
+        ResetAll(
+            r_regionkey,
+            r_name,
+            r_comment);
     }
 };
 
@@ -308,15 +331,6 @@ inline const TableMetadata kPartsupp = {
          arrow::field("ps_supplycost", arrow::float64(), false),
          arrow::field("ps_comment", arrow::utf8(), false)}),
     800'000,
-};
-
-inline const TableMetadata kRegion = {
-    "region",
-    arrow::schema(
-        {arrow::field("r_regionkey", arrow::int32(), false),
-         arrow::field("r_name", arrow::utf8(), false),
-         arrow::field("r_comment", arrow::utf8(), false)}),
-    5,
 };
 
 inline const TableMetadata kSupplier = {

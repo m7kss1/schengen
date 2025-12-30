@@ -22,7 +22,8 @@ if (TARGET yatpchgen::arrow AND TARGET yatpchgen::yaclib)
   endif ()
 
   # Arrow static build produces multiple internal object libraries that are not
-  # folded into libarrow.a. Link them explicitly to satisfy all symbols.
+  # folded into libarrow.a. Link them explicitly to satisfy all symbols
+  # TODO: FIXME
   set(_arrow_priv_deps
       arrow_array
       arrow_compute_core
