@@ -1,0 +1,155 @@
+#pragma once
+
+#include <cstddef>
+
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer) || 0
+#    define YACLIB_ASAN
+#  endif
+#  if __has_feature(thread_sanitizer) || 0
+#    define YACLIB_TSAN
+#  endif
+#  if __has_feature(memory_sanitizer) || 0
+#    define YACLIB_MEMSAN
+#  endif
+#  if __has_feature(undefined_behavior_sanitizer) || 0
+#    define YACLIB_UBSAN
+#  endif
+#else
+#  if defined(__SANITIZE_ADDRESS__) || 0
+#    define YACLIB_ASAN
+#  endif
+#  if defined(__SANITIZE_THREAD__) || 0
+#    define YACLIB_TSAN
+#  endif
+#  if defined(__SANITIZE_UNDEFINED__) || 0
+#    define YACLIB_UBSAN
+#  endif
+#endif
+
+// clang-format off
+#define YACLIB_FAULT 0
+// clang-format on
+
+// TODO(myannyax) YACLIB_SLOWDOWN with fault
+
+// Maybe we should increase some of this
+#ifndef YACLIB_SLOWDOWN
+#  if defined(YACLIB_ASAN)
+#    define YACLIB_SLOWDOWN 2
+#  elif defined(YACLIB_TSAN)
+#    define YACLIB_SLOWDOWN 2
+#  elif defined(YACLIB_MEMSAN)
+#    define YACLIB_SLOWDOWN 1
+#  else
+#    define YACLIB_SLOWDOWN 1
+#  endif
+#endif
+
+#ifndef YACLIB_MEMORY_OVERHEAD
+#  if defined(YACLIB_ASAN)
+#    define YACLIB_MEMORY_OVERHEAD 3
+#  elif defined(YACLIB_TSAN)
+#    define YACLIB_MEMORY_OVERHEAD 3
+#  elif defined(YACLIB_MEMSAN)
+#    define YACLIB_MEMORY_OVERHEAD 1
+#  else
+#    define YACLIB_MEMORY_OVERHEAD 1
+#  endif
+#endif
+
+// TODO(MBkkt) Maybe make all single line not virtual functions are YACLIB_INLINE?
+// Now I use YACLIB_INLINE for
+// * AtomicCounter::SubEqual
+//     Because I want to compiler generate code without jmp and with correct barriers
+// * Wait like functions, that just template single line wrappers for general functions
+//     Because I want to compiler don't store the instantiation of these functions,
+//     in other words, so that this template code has a minimal impact, primarily on compile time
+// Now I interested in
+// * await_resume/suspend/ready
+//     TODO(MBkkt, mkornaukhov03) Research performance impact of visibility/inlining these functions
+// * all single-line/single-if header-only yaclib functions
+
+#if !defined(YACLIB_INLINE)  // Can be used only in special case
+#  if 0
+#    define YACLIB_INLINE inline
+#  elif defined(_MSC_VER)
+#    if (_MSC_VER >= 1900 && !defined(_DEBUG))  // old and debug MSVC have problems with "__forceinline"
+#      define YACLIB_INLINE __forceinline
+#    else
+#      define YACLIB_INLINE inline
+#    endif
+#  elif defined(__GNUC__) && (defined(__clang__) || __GNUC__ > 5)  // old GCC have problems with "__always_inline__"
+#    define YACLIB_INLINE inline __attribute__((__always_inline__))
+#  else
+#    define YACLIB_INLINE inline
+#  endif
+#endif
+
+#if defined(__has_include)
+#  define YACLIB_HAS_INCLUDE(include) __has_include(include)
+#else
+#  define YACLIB_HAS_INCLUDE(include) 0
+#endif
+
+// TODO(mkornaukhov03) figure out more convenient way how to check the possibility of Symmetric Transfer
+// Now it has a problem: doesn't use Symmetric Transfer even if possible
+// clang-format off
+#if 0
+#  if YACLIB_HAS_INCLUDE(<coroutine>)
+#    define YACLIB_CORO 2
+#  else
+#    define YACLIB_CORO 1
+#  endif
+#  define YACLIB_SYMMETRIC_TRANSFER 1
+#  define YACLIB_FINAL_SUSPEND_TRANSFER 1
+#  if defined(__clang__) && defined(__apple_build_version) && defined(YACLIB_TSAN)
+// apple clang before 13.1 detect false positive data race with tsan
+#    if __apple_build_version < 13100000
+#      undef YACLIB_SYMMETRIC_TRANSFER
+#      define YACLIB_SYMMETRIC_TRANSFER 0
+#      undef YACLIB_FINAL_SUSPEND_TRANSFER
+#      define YACLIB_FINAL_SUSPEND_TRANSFER 0
+#    endif
+#  elif defined(_MSC_VER) && !defined(__clang__)
+//   MSVC buggy with symmetric transfer
+#    undef YACLIB_SYMMETRIC_TRANSFER
+#    define YACLIB_SYMMETRIC_TRANSFER 0
+//   MSVC doesn't seem to like symmetric transfer in final_suspend, runtime segfault or complile time error:
+//   https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
+#    undef YACLIB_FINAL_SUSPEND_TRANSFER
+#    define YACLIB_FINAL_SUSPEND_TRANSFER 0
+#  endif
+#else
+#  define YACLIB_CORO 0
+#  define YACLIB_SYMMETRIC_TRANSFER 0
+#  define YACLIB_FINAL_SUSPEND_TRANSFER 0
+#endif
+
+#if defined(__has_cpp_attribute)
+#  define YACLIB_HAS_ATTRIBUTE(attr) __has_cpp_attribute(attr)
+#else
+#  define YACLIB_HAS_ATTRIBUTE(attr) 0
+#endif
+
+#define YACLIB_FUTEX 0
+#if YACLIB_HAS_INCLUDE(<version>) &&                                                                                   \
+    (   defined(_MSC_VER)                                                                                              \
+     || (defined(_LIBCPP_VERSION) && (defined(__linux__) || defined(_LIBCPP_USE_ULOCK)))                               \
+     || defined(_GLIBCXX_HAVE_LINUX_FUTEX))
+#  include <version>
+#  if __cpp_lib_atomic_wait != 0
+#    undef YACLIB_FUTEX
+#    define YACLIB_FUTEX 0
+#  endif
+#endif
+// clang-format on
+
+#if YACLIB_HAS_ATTRIBUTE(msvc::no_unique_address)
+#  define YACLIB_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif YACLIB_HAS_ATTRIBUTE(no_unique_address)
+// works starts from gcc 9 and clang 9
+#  define YACLIB_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#else
+#  define YACLIB_NO_UNIQUE_ADDRESS
+#endif
