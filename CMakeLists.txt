@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 
 project(yatpchgen LANGUAGES CXX)
 
+set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
+
 option(ENABLE_LIBRARIES "Enable building bundled third-party libraries" ON)
 
 if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
@@ -10,10 +12,17 @@ endif ()
 
 add_subdirectory(contrib)
 
+if (TARGET yatpchgen::gtest_main)
+  enable_testing()
+endif ()
+
+add_subdirectory(test)
+
 if (TARGET yatpchgen::arrow AND TARGET yatpchgen::yaclib)
   add_executable(yatpchgen_main src/main.cpp)
   target_compile_features(yatpchgen_main PRIVATE cxx_std_17)
 
+  target_include_directories(yatpchgen_main PRIVATE ${PROJECT_SOURCE_DIR}/src)
   if (DEFINED YATPCHGEN_ARROW_INCLUDE_DIRS)
     target_include_directories(yatpchgen_main PRIVATE ${YATPCHGEN_ARROW_INCLUDE_DIRS})
   endif ()

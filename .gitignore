@@ -1,0 +1,22 @@
+*.cache
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+Testing/
+
+# contrib third-party builds
+contrib/*-cmake/arrow-build/
+contrib/*-cmake/yaclib-build/
+contrib/*-cmake/CMakeFiles/
+contrib/*-cmake/Makefile
+contrib/*-cmake/cmake_install.cmake
+contrib/*-cmake/compile_commands.json
+
+# IDE and generator crumbs
+.idea/
+.vscode/
+*.user

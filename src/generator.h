@@ -5,14 +5,14 @@
 #include <cstdint>
 #include <arrow/api.h>
 
-class DictionarySet;
+class TextPool;
 
 struct GeneratorContext
 {
     ScaleConfig scale;
     PartitionPlan partition;
-    /* Contains distributions and text pool for tables */
-    const DictionarySet * dictionaries = nullptr;
+    /* Shared text pool for text columns */
+    const TextPool * text_pool = nullptr;
     arrow::MemoryPool * pool = nullptr;
 };
 

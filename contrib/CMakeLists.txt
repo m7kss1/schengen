@@ -28,4 +28,5 @@ function(add_contrib cmake_folder)
 endfunction()
 
 add_contrib(arrow-cmake arrow)
+add_contrib(googletest-cmake googletest)
 add_contrib(yaclib-cmake yaclib)

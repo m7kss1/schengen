@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include <arrow/api.h>
+#include <arrow/result.h>
 
 struct TableMetadata
 {
@@ -37,12 +39,21 @@ public:
 
     void Reset() { builder_->Reset(); }
 
-    void Append(ValueType value) { ARROW_THROW_NOT_OK(builder_->Append(value)); }
+    void Append(ValueType value)
+    {
+        const auto status = builder_->Append(value);
+        if (!status.ok()) {
+            throw std::runtime_error(status.ToString());
+        }
+    }
 
     std::shared_ptr<arrow::Array> Finish()
     {
         std::shared_ptr<arrow::Array> array;
-        ARROW_THROW_NOT_OK(builder_->Finish(&array));
+        const auto status = builder_->Finish(&array);
+        if (!status.ok()) {
+            throw std::runtime_error(status.ToString());
+        }
         return array;
     }
 
@@ -63,12 +74,21 @@ public:
 
     void Reset() { builder_->Reset(); }
 
-    void Append(std::string_view value) { ARROW_THROW_NOT_OK(builder_->Append(value)); }
+    void Append(std::string_view value)
+    {
+        const auto status = builder_->Append(value);
+        if (!status.ok()) {
+            throw std::runtime_error(status.ToString());
+        }
+    }
 
     std::shared_ptr<arrow::Array> Finish()
     {
         std::shared_ptr<arrow::Array> array;
-        ARROW_THROW_NOT_OK(builder_->Finish(&array));
+        const auto status = builder_->Finish(&array);
+        if (!status.ok()) {
+            throw std::runtime_error(status.ToString());
+        }
         return array;
     }
 
@@ -93,7 +113,7 @@ public:
         return NumericColumnBuilder<T>(pool_);
     }
 
-    VarcharColumnBuilder CreateVarchar() const { return VarcharColumn(pool_); }
+    VarcharColumnBuilder CreateVarchar() const { return VarcharColumnBuilder(pool_); }
 
     arrow::MemoryPool * pool() const { return pool_; }
 
@@ -290,6 +310,15 @@ inline const TableMetadata kNation = {
          arrow::field("n_regionkey", arrow::int32(), false),
          arrow::field("n_comment", arrow::utf8(), false)}),
     25,
+};
+
+inline const TableMetadata kRegion = {
+    "region",
+    arrow::schema(
+        {arrow::field("r_regionkey", arrow::int32(), false),
+         arrow::field("r_name", arrow::utf8(), false),
+         arrow::field("r_comment", arrow::utf8(), false)}),
+    5,
 };
 
 inline const TableMetadata kOrders = {
