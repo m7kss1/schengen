@@ -1,7 +1,0 @@
-# Source this file (e.g., `cat .aliases >> ~/.bashrc`)
-
-alias schengencfg='cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo'
-
-alias schengenbld='cmake --build build --target table_generator_tests'
-
-alias schengentest='yatpchgen-build-tables && ./build/test/table_generator_tests --gtest_filter=RegionGeneratorTest.*'
