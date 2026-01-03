@@ -295,6 +295,41 @@ public:
     }
 };
 
+class SupplierColumns : public ColumnSetBase
+{
+public:
+    NumericColumnBuilder<arrow::Int32Type> s_suppkey;
+    VarcharColumnBuilder s_name;
+    VarcharColumnBuilder s_address;
+    NumericColumnBuilder<arrow::Int32Type> s_nationkey;
+    VarcharColumnBuilder s_phone;
+    NumericColumnBuilder<arrow::DoubleType> s_acctbal;
+    VarcharColumnBuilder s_comment;
+
+    explicit SupplierColumns(const BuilderFactory & factory)
+        : s_suppkey(factory.CreateNumeric<arrow::Int32Type>())
+        , s_name(factory.CreateVarchar())
+        , s_address(factory.CreateVarchar())
+        , s_nationkey(factory.CreateNumeric<arrow::Int32Type>())
+        , s_phone(factory.CreateVarchar())
+        , s_acctbal(factory.CreateNumeric<arrow::DoubleType>())
+        , s_comment(factory.CreateVarchar())
+    {
+    }
+
+    void ClearAll()
+    {
+        ResetAll(
+            s_suppkey,
+            s_name,
+            s_address,
+            s_nationkey,
+            s_phone,
+            s_acctbal,
+            s_comment);
+    }
+};
+
 inline const TableMetadata kCustomer = {
     "customer",
     arrow::schema(

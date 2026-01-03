@@ -3,6 +3,7 @@
 #include "nation.h"
 #include "region.h"
 #include "rands.h"
+#include "supplier.h"
 
 #include <array>
 #include <filesystem>
@@ -67,6 +68,49 @@ static std::string FormatNationRow(const NationRow & row)
     return out;
 }
 
+static std::string FormatDecimalCents(std::int32_t cents)
+{
+    const bool negative = cents < 0;
+    const std::int32_t abs_cents = negative ? -cents : cents;
+    const std::int32_t int_digits = abs_cents / 100;
+    const std::int32_t dec_digits = abs_cents % 100;
+
+    std::string out;
+    out.reserve(32);
+    if (negative) {
+        out.push_back('-');
+    }
+    out.append(std::to_string(int_digits));
+    out.push_back('.');
+    if (dec_digits < 10) {
+        out.push_back('0');
+    }
+    out.append(std::to_string(dec_digits));
+    return out;
+}
+
+static std::string FormatSupplierRow(const SupplierRow & row)
+{
+    std::string out;
+    out.reserve(128 + row.s_name.size() + row.s_address.size() + row.s_phone.size() + row.s_comment.size());
+    out.append(std::to_string(row.s_suppkey));
+    out.push_back('|');
+    out.append(row.s_name.data(), row.s_name.size());
+    out.push_back('|');
+    out.append(row.s_address.data(), row.s_address.size());
+    out.push_back('|');
+    out.append(std::to_string(row.s_nationkey));
+    out.push_back('|');
+    out.append(row.s_phone.data(), row.s_phone.size());
+    out.push_back('|');
+    const auto acctbal = FormatDecimalCents(row.s_acctbal_cents);
+    out.append(acctbal.data(), acctbal.size());
+    out.push_back('|');
+    out.append(row.s_comment.data(), row.s_comment.size());
+    out.push_back('|');
+    return out;
+}
+
 TEST(RegionGeneratorTest, MatchesReferenceTable)
 {
     const auto expected =
@@ -96,6 +140,23 @@ TEST(NationGeneratorTest, MatchesReferenceTable)
     for (std::size_t i = 0; i < expected.size(); ++i) {
         ASSERT_TRUE(iter.Next(&row));
         EXPECT_EQ(expected[i], FormatNationRow(row)) << "row " << i;
+    }
+
+    EXPECT_FALSE(iter.Next(&row));
+}
+
+TEST(SupplierGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("supplier.tbl").c_str());
+
+    SupplierRowIterator iter;
+    iter.Reset(/*start_row=*/0, /*end_row=*/expected.size(), text_pool);
+
+    SupplierRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.Next(&row));
+        EXPECT_EQ(expected[i], FormatSupplierRow(row)) << "row " << i;
     }
 
     EXPECT_FALSE(iter.Next(&row));

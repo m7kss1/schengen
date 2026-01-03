@@ -2,6 +2,7 @@
 
 #include "nation.h"
 #include "region.h"
+#include "supplier.h"
 #include "table_registry.h"
 
 inline void RegisterTableNation(TableRegistry & registry)
@@ -22,6 +23,15 @@ inline void RegisterTableRegion(TableRegistry & registry)
         });
 }
 
+inline void RegisterTableSupplier(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kSupplier,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<SupplierGenerator>(pool);
+        });
+}
+
 inline void RegisterTables()
 {
     auto & registry = TableRegistry::Instance();
@@ -30,5 +40,6 @@ inline void RegisterTables()
     {
         RegisterTableNation(registry);
         RegisterTableRegion(registry);
+        RegisterTableSupplier(registry);
     }
 }

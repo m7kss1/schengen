@@ -2,11 +2,11 @@
 
 #include "distribution.h"
 
+#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <string_view>
-#include <cstdint>
 
 class RowRandomInt
 {
@@ -118,6 +118,152 @@ private:
     std::int32_t seeds_per_row_ = 0;
 };
 
+class RandomBoundedInt
+{
+public:
+    RandomBoundedInt() = default;
+
+    RandomBoundedInt(std::int64_t seed,
+                     std::int32_t lower_bound,
+                     std::int32_t upper_bound,
+                     std::int32_t seeds_per_row = 1)
+        : lower_bound_(lower_bound)
+        , upper_bound_(upper_bound)
+        , inner_(seed, seeds_per_row)
+    {
+    }
+
+    std::int32_t NextValue() { return inner_.NextInt(lower_bound_, upper_bound_); }
+
+    void AdvanceRows(std::int64_t row_count) { inner_.AdvanceRows(row_count); }
+    void RowFinished() { inner_.RowFinished(); }
+
+private:
+    std::int32_t lower_bound_ = 0;
+    std::int32_t upper_bound_ = 0;
+    RowRandomInt inner_{};
+};
+
+class RandomAlphaNumericInstance
+{
+public:
+    void ToString(std::string & out) const
+    {
+        static constexpr std::string_view kAlphabet =
+            "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
+
+        out.resize(length_);
+
+        RowRandomInt generator = snapshot_;
+        std::int64_t char_index = 0;
+
+        for (std::int32_t i = 0; i < length_; ++i) {
+            if (i % 5 == 0) {
+                char_index =
+                    static_cast<std::int64_t>(generator.NextInt(0, std::numeric_limits<std::int32_t>::max()));
+            }
+
+            const std::size_t char_pos = static_cast<std::size_t>(char_index & 0x3f);
+            out[static_cast<std::size_t>(i)] = kAlphabet[char_pos];
+            char_index >>= 6;
+        }
+    }
+
+private:
+    friend class RandomAlphaNumeric;
+
+    std::int32_t length_ = 0;
+    RowRandomInt snapshot_{};
+};
+
+class RandomAlphaNumeric
+{
+public:
+    static constexpr double kLowLengthMultiplier = 0.4;
+    static constexpr double kHighLengthMultiplier = 1.6;
+    static constexpr std::int32_t kUsagePerRow = 9;
+
+    RandomAlphaNumeric() = default;
+
+    RandomAlphaNumeric(std::int64_t seed,
+                       std::int32_t average_length,
+                       std::int32_t expected_row_count = 1)
+        : inner_(seed, kUsagePerRow * expected_row_count)
+        , min_length_(static_cast<std::int32_t>(
+              static_cast<double>(average_length) * kLowLengthMultiplier))
+        , max_length_(static_cast<std::int32_t>(
+              static_cast<double>(average_length) * kHighLengthMultiplier))
+    {
+    }
+
+    RandomAlphaNumericInstance NextValue()
+    {
+        RandomAlphaNumericInstance instance;
+        instance.length_ = inner_.NextInt(min_length_, max_length_);
+        instance.snapshot_ = inner_;
+        return instance;
+    }
+
+    void AdvanceRows(std::int64_t row_count) { inner_.AdvanceRows(row_count); }
+    void RowFinished() { inner_.RowFinished(); }
+
+private:
+    RowRandomInt inner_{};
+    std::int32_t min_length_ = 0;
+    std::int32_t max_length_ = 0;
+};
+
+struct PhoneNumberInstance
+{
+    std::int32_t country_code = 0;
+    std::int32_t local1 = 0;
+    std::int32_t local2 = 0;
+    std::int32_t local3 = 0;
+
+    void ToString(std::string & out) const
+    {
+        char buffer[32];
+        const int n = std::snprintf(
+            buffer,
+            sizeof(buffer),
+            "%02d-%03d-%03d-%04d",
+            country_code,
+            local1,
+            local2,
+            local3);
+        out.assign(buffer, buffer + (n > 0 ? n : 0));
+    }
+};
+
+class RandomPhoneNumber
+{
+public:
+    static constexpr std::int32_t kNationsMax = 90;
+
+    RandomPhoneNumber() = default;
+
+    explicit RandomPhoneNumber(std::int64_t seed,
+                               std::int32_t expected_row_count = 1)
+        : inner_(seed, 3 * expected_row_count)
+    {
+    }
+
+    PhoneNumberInstance NextValue(std::int64_t nation_key)
+    {
+        PhoneNumberInstance phone;
+        phone.country_code = 10 + static_cast<std::int32_t>(nation_key % kNationsMax);
+        phone.local1 = inner_.NextInt(100, 999);
+        phone.local2 = inner_.NextInt(100, 999);
+        phone.local3 = inner_.NextInt(1000, 9999);
+        return phone;
+    }
+
+    void AdvanceRows(std::int64_t row_count) { inner_.AdvanceRows(row_count); }
+    void RowFinished() { inner_.RowFinished(); }
+
+private:
+    RowRandomInt inner_{};
+};
 
 class TextPool
 {
