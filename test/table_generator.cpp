@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "region.h"
-#include "random.h"
+#include "rands.h"
 
 #include <array>
 #include <string_view>

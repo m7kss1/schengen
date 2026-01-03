@@ -1,4 +1,4 @@
-if (NOT TARGET yatpchgen::gtest_main)
+if (NOT TARGET sch::gtest_main)
   message(STATUS "GoogleTest is disabled; skipping unit tests")
   return()
 endif ()
@@ -10,14 +10,14 @@ target_include_directories(
   PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
 )
-if (DEFINED YATPCHGEN_ARROW_INCLUDE_DIRS)
-  target_include_directories(table_generator_tests PRIVATE ${YATPCHGEN_ARROW_INCLUDE_DIRS})
+if (DEFINED ARROW_INCLUDE_DIRS)
+  target_include_directories(table_generator_tests PRIVATE ${ARROW_INCLUDE_DIRS})
 endif ()
-if (DEFINED YATPCHGEN_YACLIB_INCLUDE_DIRS)
-  target_include_directories(table_generator_tests PRIVATE ${YATPCHGEN_YACLIB_INCLUDE_DIRS})
+if (DEFINED YACLIB_INCLUDE_DIRS)
+  target_include_directories(table_generator_tests PRIVATE ${YACLIB_INCLUDE_DIRS})
 endif ()
-target_link_libraries(table_generator_tests PRIVATE yatpchgen::gtest_main)
-if (TARGET yatpchgen::arrow)
+target_link_libraries(table_generator_tests PRIVATE sch::gtest_main)
+if (TARGET sch::arrow)
   set(_arrow_priv_deps
       arrow_array
       arrow_compute_core
@@ -35,7 +35,7 @@ if (TARGET yatpchgen::arrow)
   target_link_libraries(
     table_generator_tests
     PRIVATE
-      yatpchgen::arrow
+      sch::arrow
       ${_existing_arrow_priv_deps}
   )
 endif ()

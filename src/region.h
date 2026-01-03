@@ -87,6 +87,7 @@ public:
     {
         ctx_ = ctx;
         columns_.ClearAll();
+        /* TODO: Get rid of TextPool from GeneratorContext */
         const TextPool & text_pool = ctx.text_pool != nullptr
             ? *ctx.text_pool
             : TextPool::Default();

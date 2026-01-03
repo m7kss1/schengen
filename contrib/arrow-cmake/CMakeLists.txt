@@ -5,7 +5,7 @@ if (NOT ENABLE_ARROW)
   return()
 endif ()
 
-set(YATPCHGEN_ARROW_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../arrow/cpp")
+set(ARROW_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../arrow/cpp")
 
 set(ARROW_BUILD_SHARED OFF CACHE BOOL "Disable Arrow shared libraries" FORCE)
 set(ARROW_BUILD_STATIC ON CACHE BOOL "Enable Arrow static libraries" FORCE)
@@ -17,16 +17,16 @@ set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "Disable Arrow CLI utilities" FORCE)
 set(ARROW_SIMD_LEVEL "NONE" CACHE STRING "Disable Arrow SIMD to ease portability" FORCE)
 set(ARROW_RUNTIME_SIMD_LEVEL "NONE" CACHE STRING "Disable runtime SIMD dispatch" FORCE)
 
-set(YATPCHGEN_ARROW_INCLUDE_DIRS
-    "${YATPCHGEN_ARROW_SOURCE_DIR}/src"
+set(ARROW_INCLUDE_DIRS
+    "${ARROW_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/arrow-build/src"
-    CACHE INTERNAL "Arrow include directories used by yatpchgen" FORCE)
+    CACHE INTERNAL "Arrow include directories" FORCE)
 
 add_subdirectory(
-  "${YATPCHGEN_ARROW_SOURCE_DIR}"
+  "${ARROW_SOURCE_DIR}"
   "${CMAKE_CURRENT_BINARY_DIR}/arrow-build"
 )
 
 if (TARGET arrow_static)
-  add_library(yatpchgen::arrow ALIAS arrow_static)
+  add_library(sch::arrow ALIAS arrow_static)
 endif ()

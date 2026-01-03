@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(yatpchgen LANGUAGES CXX)
+project(schengen LANGUAGES CXX)
 
 set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
 
@@ -12,22 +12,22 @@ endif ()
 
 add_subdirectory(contrib)
 
-if (TARGET yatpchgen::gtest_main)
+if (TARGET sch::gtest_main)
   enable_testing()
 endif ()
 
 add_subdirectory(test)
 
-if (TARGET yatpchgen::arrow AND TARGET yatpchgen::yaclib)
-  add_executable(yatpchgen_main src/main.cpp)
-  target_compile_features(yatpchgen_main PRIVATE cxx_std_17)
+if (TARGET sch::arrow AND TARGET sch::yaclib)
+  add_executable(schengen_main src/main.cpp)
+  target_compile_features(schengen_main PRIVATE cxx_std_17)
 
-  target_include_directories(yatpchgen_main PRIVATE ${PROJECT_SOURCE_DIR}/src)
-  if (DEFINED YATPCHGEN_ARROW_INCLUDE_DIRS)
-    target_include_directories(yatpchgen_main PRIVATE ${YATPCHGEN_ARROW_INCLUDE_DIRS})
+  target_include_directories(schengen_main PRIVATE ${PROJECT_SOURCE_DIR}/src)
+  if (DEFINED ARROW_INCLUDE_DIRS)
+    target_include_directories(schengen_main PRIVATE ${ARROW_INCLUDE_DIRS})
   endif ()
-  if (DEFINED YATPCHGEN_YACLIB_INCLUDE_DIRS)
-    target_include_directories(yatpchgen_main PRIVATE ${YATPCHGEN_YACLIB_INCLUDE_DIRS})
+  if (DEFINED YACLIB_INCLUDE_DIRS)
+    target_include_directories(schengen_main PRIVATE ${YACLIB_INCLUDE_DIRS})
   endif ()
 
   # Arrow static build produces multiple internal object libraries that are not
@@ -48,17 +48,17 @@ if (TARGET yatpchgen::arrow AND TARGET yatpchgen::yaclib)
   endforeach()
 
   target_link_libraries(
-    yatpchgen_main
+    schengen_main
     PRIVATE
       ${_existing_arrow_priv_deps}
-      yatpchgen::arrow
-      yatpchgen::yaclib
+      sch::arrow
+      sch::yaclib
   )
 else ()
-  if (NOT TARGET yatpchgen::arrow)
+  if (NOT TARGET sch::arrow)
     message(STATUS "Apache Arrow is disabled")
   endif ()
-  if (NOT TARGET yatpchgen::yaclib)
+  if (NOT TARGET sch::yaclib)
     message(STATUS "YACLib is disabled")
   endif ()
 endif ()
