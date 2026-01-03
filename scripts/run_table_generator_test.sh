@@ -9,4 +9,4 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 cmake --build build --target table_generator_tests
 
-./build/test/table_generator_tests --gtest_filter=RegionGeneratorTest.*
+./build/test/table_generator_tests --gtest_filter=${1}.*

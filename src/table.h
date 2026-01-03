@@ -246,6 +246,32 @@ public:
     }
 };
 
+class NationColumns : public ColumnSetBase
+{
+public:
+    NumericColumnBuilder<arrow::Int32Type> n_nationkey;
+    VarcharColumnBuilder n_name;
+    NumericColumnBuilder<arrow::Int32Type> n_regionkey;
+    VarcharColumnBuilder n_comment;
+
+    explicit NationColumns(const BuilderFactory & factory)
+        : n_nationkey(factory.CreateNumeric<arrow::Int32Type>())
+        , n_name(factory.CreateVarchar())
+        , n_regionkey(factory.CreateNumeric<arrow::Int32Type>())
+        , n_comment(factory.CreateVarchar())
+    {
+    }
+
+    void ClearAll()
+    {
+        ResetAll(
+            n_nationkey,
+            n_name,
+            n_regionkey,
+            n_comment);
+    }
+};
+
 class RegionColumns : public ColumnSetBase
 {
 public:
