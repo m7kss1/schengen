@@ -138,18 +138,35 @@ public:
     VarcharColumnBuilder c_name;
     VarcharColumnBuilder c_address;
     NumericColumnBuilder<arrow::Int32Type> c_nationkey;
+    VarcharColumnBuilder c_phone;
     NumericColumnBuilder<arrow::DoubleType> c_acctbal;
+    VarcharColumnBuilder c_mktsegment;
+    VarcharColumnBuilder c_comment;
 
     explicit CustomerColumns(const BuilderFactory & factory)
         : c_custkey(factory.CreateNumeric<arrow::Int32Type>())
         , c_name(factory.CreateVarchar())
         , c_address(factory.CreateVarchar())
         , c_nationkey(factory.CreateNumeric<arrow::Int32Type>())
+        , c_phone(factory.CreateVarchar())
         , c_acctbal(factory.CreateNumeric<arrow::DoubleType>())
+        , c_mktsegment(factory.CreateVarchar())
+        , c_comment(factory.CreateVarchar())
     {
     }
 
-    void ClearAll() { ResetAll(c_custkey, c_name, c_address, c_nationkey, c_acctbal); }
+    void ClearAll()
+    {
+        ResetAll(
+            c_custkey,
+            c_name,
+            c_address,
+            c_nationkey,
+            c_phone,
+            c_acctbal,
+            c_mktsegment,
+            c_comment);
+    }
 };
 
 class OrdersColumns : public ColumnSetBase
@@ -407,7 +424,10 @@ inline const TableMetadata kCustomer = {
          arrow::field("c_name", arrow::utf8(), false),
          arrow::field("c_address", arrow::utf8(), false),
          arrow::field("c_nationkey", arrow::int32(), false),
-         arrow::field("c_acctbal", arrow::float64(), false)}),
+         arrow::field("c_phone", arrow::utf8(), false),
+         arrow::field("c_acctbal", arrow::float64(), false),
+         arrow::field("c_mktsegment", arrow::utf8(), false),
+         arrow::field("c_comment", arrow::utf8(), false)}),
     150'000,
 };
 

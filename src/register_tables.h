@@ -1,11 +1,21 @@
 #pragma once
 
+#include "customer.h"
 #include "nation.h"
 #include "partsupp.h"
 #include "region.h"
 #include "supplier.h"
 #include "part.h"
 #include "table_registry.h"
+
+inline void RegisterTableCustomer(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kCustomer,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<CustomerGenerator>(pool);
+        });
+}
 
 inline void RegisterTableNation(TableRegistry & registry)
 {
@@ -58,6 +68,7 @@ inline void RegisterTables()
 
     /* Register TPC-H tables */
     {
+        RegisterTableCustomer(registry);
         RegisterTableNation(registry);
         RegisterTableRegion(registry);
         RegisterTableSupplier(registry);

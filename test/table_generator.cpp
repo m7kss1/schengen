@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "customer.h"
 #include "nation.h"
 #include "part.h"
 #include "partsupp.h"
@@ -157,6 +158,30 @@ static std::string FormatPartRow(const PartRow & row)
     return out;
 }
 
+static std::string FormatCustomerRow(const CustomerRow & row)
+{
+    std::string out;
+    out.reserve(256 + row.c_name.size() + row.c_address.size() + row.c_comment.size());
+    out.append(std::to_string(row.c_custkey));
+    out.push_back('|');
+    out.append(row.c_name.data(), row.c_name.size());
+    out.push_back('|');
+    out.append(row.c_address.data(), row.c_address.size());
+    out.push_back('|');
+    out.append(std::to_string(row.c_nationkey));
+    out.push_back('|');
+    out.append(row.c_phone.data(), row.c_phone.size());
+    out.push_back('|');
+    const auto acctbal = FormatDecimalCents(row.c_acctbal_cents);
+    out.append(acctbal);
+    out.push_back('|');
+    out.append(row.c_mktsegment.data(), row.c_mktsegment.size());
+    out.push_back('|');
+    out.append(row.c_comment.data(), row.c_comment.size());
+    out.push_back('|');
+    return out;
+}
+
 TEST(RegionGeneratorTest, MatchesReferenceTable)
 {
     const auto expected =
@@ -242,4 +267,21 @@ TEST(PartGeneratorTest, MatchesReferenceTable)
     }
 
     EXPECT_FALSE(iter.NextValue(&row));
+}
+
+TEST(CustomerGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("customer.tbl").c_str());
+
+    CustomerRowIterator iter;
+    iter.Reset(/*start_row=*/0, /*end_row=*/expected.size(), text_pool);
+
+    CustomerRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.Next(&row));
+        EXPECT_EQ(expected[i], FormatCustomerRow(row)) << "row " << i;
+    }
+
+    EXPECT_FALSE(iter.Next(&row));
 }
