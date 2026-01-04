@@ -2,6 +2,7 @@
 
 #include "customer.h"
 #include "nation.h"
+#include "orders.h"
 #include "partsupp.h"
 #include "region.h"
 #include "supplier.h"
@@ -62,6 +63,15 @@ inline void RegisterTablePart(TableRegistry & registry)
         });
 }
 
+inline void RegisterTableOrders(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kOrders,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<OrderGenerator>(pool);
+        });
+}
+
 inline void RegisterTables()
 {
     auto & registry = TableRegistry::Instance();
@@ -74,5 +84,6 @@ inline void RegisterTables()
         RegisterTableSupplier(registry);
         RegisterTablePartSupp(registry);
         RegisterTablePart(registry);
+        RegisterTableOrders(registry);
     }
 }

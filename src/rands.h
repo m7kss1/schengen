@@ -3,6 +3,7 @@
 #include "distribution.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -118,6 +119,140 @@ private:
     std::int64_t seed_ = 0;
     std::int32_t usage_ = 0;
     std::int32_t seeds_per_row_ = 0;
+};
+
+/// 64-bit version of RowRandomInt used when we need values outside 32-bit range.
+/// Internally it still uses the TPC-H 32-bit multiplier to do `AdvanceSeed`.
+/// Each call consumes one seed, `RowFinished` pads the remaining budget per row.
+class RowRandomLong
+{
+public:
+    static constexpr std::int64_t kMultiplier = 6364136223846793005LL;
+    static constexpr std::int64_t kIncrement = 1;
+    static constexpr std::int64_t kMultiplier32 = 16807;
+    static constexpr std::int64_t kModulus32 = 2147483647;
+
+    RowRandomLong() = default;
+
+    RowRandomLong(std::int64_t seed, std::int32_t seeds_per_row)
+        : seed_(seed)
+        , seeds_per_row_(seeds_per_row)
+    {
+    }
+
+    std::int64_t NextLong(std::int64_t lo, std::int64_t hi)
+    {
+        NextRand();
+        const std::int64_t range = hi - lo + 1;
+        const std::int64_t value = std::llabs(seed_) % range;
+        return lo + value;
+    }
+
+    std::int64_t NextRand()
+    {
+        seed_ = seed_ * kMultiplier + kIncrement;
+        ++usage_;
+        return seed_;
+    }
+
+    void RowFinished()
+    {
+        const std::int64_t remaining =
+            static_cast<std::int64_t>(seeds_per_row_ - usage_);
+        if (remaining > 0) {
+            AdvanceSeed32(remaining);
+        }
+        usage_ = 0;
+    }
+
+    void AdvanceRows(std::int64_t row_count)
+    {
+        if (usage_ != 0) {
+            RowFinished();
+        }
+        const std::int64_t count =
+            static_cast<std::int64_t>(seeds_per_row_) * row_count;
+        if (count > 0) {
+            AdvanceSeed32(count);
+        }
+    }
+
+private:
+    void AdvanceSeed32(std::int64_t count)
+    {
+        std::int64_t multiplier = kMultiplier32;
+        std::int64_t remaining = count;
+
+        while (remaining > 0) {
+            if (remaining % 2 != 0) {
+                seed_ = (multiplier * seed_) % kModulus32;
+            }
+            remaining /= 2;
+            multiplier = (multiplier * multiplier) % kModulus32;
+        }
+    }
+
+    std::int64_t seed_ = 0;
+    std::int32_t usage_ = 0;
+    std::int32_t seeds_per_row_ = 0;
+};
+
+/// Wraps `RowRandomLong` / `RowRandomInt` and switches to 64-bit random numbers
+/// when the upper bound exceeds 32-bit limits (scale_factor >= 30000).  All other
+/// rows reuse 32-bit generator.
+class RandomBoundedLong
+{
+public:
+    RandomBoundedLong() = default;
+
+    RandomBoundedLong(std::int64_t seed,
+                      bool use_64bits,
+                      std::int64_t lower_bound,
+                      std::int64_t upper_bound,
+                      std::int32_t seeds_per_row = 1)
+        : use_64bits_(use_64bits)
+        , lower_bound_(lower_bound)
+        , upper_bound_(upper_bound)
+        , random_long_(seed, seeds_per_row)
+        , random_int_(seed, seeds_per_row)
+    {
+    }
+
+    std::int64_t NextValue()
+    {
+        if (use_64bits_) {
+            return random_long_.NextLong(lower_bound_, upper_bound_);
+        }
+        return static_cast<std::int64_t>(
+            random_int_.NextInt(
+                static_cast<std::int32_t>(lower_bound_),
+                static_cast<std::int32_t>(upper_bound_)));
+    }
+
+    void AdvanceRows(std::int64_t row_count)
+    {
+        if (use_64bits_) {
+            random_long_.AdvanceRows(row_count);
+        } else {
+            random_int_.AdvanceRows(row_count);
+        }
+    }
+
+    void RowFinished()
+    {
+        if (use_64bits_) {
+            random_long_.RowFinished();
+        } else {
+            random_int_.RowFinished();
+        }
+    }
+
+private:
+    bool use_64bits_ = false;
+    std::int64_t lower_bound_ = 0;
+    std::int64_t upper_bound_ = 0;
+    RowRandomLong random_long_{};
+    RowRandomInt random_int_{};
 };
 
 class RandomBoundedInt

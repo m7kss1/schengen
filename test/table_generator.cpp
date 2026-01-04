@@ -2,6 +2,7 @@
 
 #include "customer.h"
 #include "nation.h"
+#include "orders.h"
 #include "part.h"
 #include "partsupp.h"
 #include "region.h"
@@ -182,6 +183,33 @@ static std::string FormatCustomerRow(const CustomerRow & row)
     return out;
 }
 
+static std::string FormatOrderRow(const OrderRow & row)
+{
+    std::string out;
+    out.reserve(256 + row.o_comment.size());
+    out.append(std::to_string(row.o_orderkey));
+    out.push_back('|');
+    out.append(std::to_string(row.o_custkey));
+    out.push_back('|');
+    out.append(row.o_orderstatus.data(), row.o_orderstatus.size());
+    out.push_back('|');
+    const auto totalprice = FormatDecimalCents(row.o_totalprice_cents);
+    out.append(totalprice);
+    out.push_back('|');
+    const auto orderdate = TPCHDate::Format(row.o_orderdate);
+    out.append(orderdate);
+    out.push_back('|');
+    out.append(row.o_orderpriority.data(), row.o_orderpriority.size());
+    out.push_back('|');
+    out.append(row.o_clerk.data(), row.o_clerk.size());
+    out.push_back('|');
+    out.append(std::to_string(row.o_shippriority));
+    out.push_back('|');
+    out.append(row.o_comment.data(), row.o_comment.size());
+    out.push_back('|');
+    return out;
+}
+
 TEST(RegionGeneratorTest, MatchesReferenceTable)
 {
     const auto expected =
@@ -281,6 +309,23 @@ TEST(CustomerGeneratorTest, MatchesReferenceTable)
     for (std::size_t i = 0; i < expected.size(); ++i) {
         ASSERT_TRUE(iter.Next(&row));
         EXPECT_EQ(expected[i], FormatCustomerRow(row)) << "row " << i;
+    }
+
+    EXPECT_FALSE(iter.Next(&row));
+}
+
+TEST(OrderGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("orders.tbl").c_str());
+
+    OrderRowIterator iter;
+    iter.Reset(/*start_row=*/0, /*end_row=*/expected.size(), /*scale_factor=*/1.0, text_pool);
+
+    OrderRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.Next(&row));
+        EXPECT_EQ(expected[i], FormatOrderRow(row)) << "row " << i;
     }
 
     EXPECT_FALSE(iter.Next(&row));
