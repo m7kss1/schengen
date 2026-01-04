@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nation.h"
+#include "partsupp.h"
 #include "region.h"
 #include "supplier.h"
 #include "table_registry.h"
@@ -32,6 +33,15 @@ inline void RegisterTableSupplier(TableRegistry & registry)
         });
 }
 
+inline void RegisterTablePartSupp(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kPartsupp,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<PartSuppGenerator>(pool);
+        });
+}
+
 inline void RegisterTables()
 {
     auto & registry = TableRegistry::Instance();
@@ -41,5 +51,6 @@ inline void RegisterTables()
         RegisterTableNation(registry);
         RegisterTableRegion(registry);
         RegisterTableSupplier(registry);
+        RegisterTablePartSupp(registry);
     }
 }

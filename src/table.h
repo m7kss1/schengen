@@ -330,6 +330,35 @@ public:
     }
 };
 
+class PartSuppColumns : public ColumnSetBase
+{
+public:
+    NumericColumnBuilder<arrow::Int32Type> ps_partkey;
+    NumericColumnBuilder<arrow::Int32Type> ps_suppkey;
+    NumericColumnBuilder<arrow::Int32Type> ps_availqty;
+    NumericColumnBuilder<arrow::DoubleType> ps_supplycost;
+    VarcharColumnBuilder ps_comment;
+
+    explicit PartSuppColumns(const BuilderFactory & factory)
+        : ps_partkey(factory.CreateNumeric<arrow::Int32Type>())
+        , ps_suppkey(factory.CreateNumeric<arrow::Int32Type>())
+        , ps_availqty(factory.CreateNumeric<arrow::Int32Type>())
+        , ps_supplycost(factory.CreateNumeric<arrow::DoubleType>())
+        , ps_comment(factory.CreateVarchar())
+    {
+    }
+
+    void ClearAll()
+    {
+        ResetAll(
+            ps_partkey,
+            ps_suppkey,
+            ps_availqty,
+            ps_supplycost,
+            ps_comment);
+    }
+};
+
 inline const TableMetadata kCustomer = {
     "customer",
     arrow::schema(
