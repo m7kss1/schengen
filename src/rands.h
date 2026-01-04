@@ -7,6 +7,8 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 class RowRandomInt
 {
@@ -263,6 +265,137 @@ public:
 
 private:
     RowRandomInt inner_{};
+};
+
+class RandomString
+{
+public:
+    RandomString() = default;
+
+    RandomString(std::int64_t seed,
+                 const DistributionView & distribution,
+                 std::int32_t expected_row_count = 1)
+        : inner_(seed, expected_row_count)
+        , distribution_(&distribution)
+    {
+    }
+
+    /*
+     * Pick a token from the distribution using weighted sampling
+     * This mirrors TextPool::PickToken but is reused for non-TextPool columns
+     */
+    std::string_view NextValue()
+    {
+        if (distribution_ == nullptr || distribution_->size == 0) {
+            return {};
+        }
+        return PickToken(*distribution_, inner_);
+    }
+
+    void AdvanceRows(std::int64_t row_count) { inner_.AdvanceRows(row_count); }
+    void RowFinished() { inner_.RowFinished(); }
+
+private:
+    static std::string_view PickToken(const DistributionView & dist, RowRandomInt & random)
+    {
+        const std::int32_t total = dist.total_weight;
+        const std::int32_t sample = random.NextInt(0, total - 1);
+        std::int32_t cumulative = 0;
+
+        for (std::size_t i = 0; i < dist.size; ++i) {
+            cumulative += dist.entries[i].weight;
+            if (sample < cumulative) {
+                return dist.entries[i].token;
+            }
+        }
+
+        return dist.entries[dist.size - 1].token;
+    }
+
+    RowRandomInt inner_{};
+    const DistributionView * distribution_ = nullptr;
+};
+
+class StringSequenceInstance
+{
+public:
+    /*
+     * Join the selected tokens into a single space-separated string
+     * The instance stores views into the distribution table, so the
+     * result must be materialized by the caller when needed
+     */
+    void ToString(std::string & out) const
+    {
+        out.clear();
+        if (values_.empty()) {
+            return;
+        }
+
+        out.append(values_[0].data(), values_[0].size());
+        for (std::size_t i = 1; i < values_.size(); ++i) {
+            out.push_back(' ');
+            out.append(values_[i].data(), values_[i].size());
+        }
+    }
+
+    const std::vector<std::string_view> & values() const { return values_; }
+
+private:
+    friend class RandomStringSequence;
+
+    std::vector<std::string_view> values_;
+};
+
+class RandomStringSequence
+{
+public:
+    RandomStringSequence() = default;
+
+    RandomStringSequence(std::int64_t seed,
+                         std::int32_t count,
+                         const DistributionView & distribution,
+                         std::int32_t expected_row_count = 1)
+        : inner_(seed, static_cast<std::int32_t>(distribution.size) * expected_row_count)
+        , count_(count)
+        , distribution_(&distribution)
+    {
+    }
+
+    /* 
+     * Shuffle first `count_` elements and then truncate to `count_` 
+     */
+    StringSequenceInstance NextValue()
+    {
+        StringSequenceInstance instance;
+        if (distribution_ == nullptr || distribution_->size == 0 || count_ <= 0) {
+            return instance;
+        }
+
+        instance.values_.reserve(distribution_->size);
+        for (std::size_t i = 0; i < distribution_->size; ++i) {
+            instance.values_.push_back(distribution_->entries[i].token);
+        }
+
+        const std::int32_t limit =
+            std::min<std::int32_t>(count_, static_cast<std::int32_t>(instance.values_.size()));
+
+        for (std::int32_t current = 0; current < limit; ++current) {
+            const std::int32_t swap_with_idx =
+                inner_.NextInt(current, static_cast<std::int32_t>(instance.values_.size() - 1));
+            std::swap(instance.values_[current], instance.values_[swap_with_idx]);
+        }
+
+        instance.values_.resize(static_cast<std::size_t>(limit));
+        return instance;
+    }
+
+    void AdvanceRows(std::int64_t row_count) { inner_.AdvanceRows(row_count); }
+    void RowFinished() { inner_.RowFinished(); }
+
+private:
+    RowRandomInt inner_{};
+    std::int32_t count_ = 0;
+    const DistributionView * distribution_ = nullptr;
 };
 
 class TextPool

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include "nation.h"
+#include "part.h"
+#include "partsupp.h"
 #include "region.h"
 #include "rands.h"
 #include "supplier.h"
@@ -111,6 +113,50 @@ static std::string FormatSupplierRow(const SupplierRow & row)
     return out;
 }
 
+static std::string FormatPartSuppRow(const PartSuppRow & row)
+{
+    std::string out;
+    out.reserve(128 + row.ps_comment.size());
+    out.append(std::to_string(row.ps_partkey));
+    out.push_back('|');
+    out.append(std::to_string(row.ps_suppkey));
+    out.push_back('|');
+    out.append(std::to_string(row.ps_availqty));
+    out.push_back('|');
+    const auto supplycost = FormatDecimalCents(row.ps_supplycost_cents);
+    out.append(supplycost);
+    out.push_back('|');
+    out.append(row.ps_comment.data(), row.ps_comment.size());
+    out.push_back('|');
+    return out;
+}
+
+static std::string FormatPartRow(const PartRow & row)
+{
+    std::string out;
+    out.reserve(256 + row.p_name.size() + row.p_comment.size());
+    out.append(std::to_string(row.p_partkey));
+    out.push_back('|');
+    out.append(row.p_name.data(), row.p_name.size());
+    out.push_back('|');
+    out.append(row.p_mfgr.data(), row.p_mfgr.size());
+    out.push_back('|');
+    out.append(row.p_brand.data(), row.p_brand.size());
+    out.push_back('|');
+    out.append(row.p_type.data(), row.p_type.size());
+    out.push_back('|');
+    out.append(std::to_string(row.p_size));
+    out.push_back('|');
+    out.append(row.p_container.data(), row.p_container.size());
+    out.push_back('|');
+    const auto price = FormatDecimalCents(row.p_retailprice_cents);
+    out.append(price);
+    out.push_back('|');
+    out.append(row.p_comment.data(), row.p_comment.size());
+    out.push_back('|');
+    return out;
+}
+
 TEST(RegionGeneratorTest, MatchesReferenceTable)
 {
     const auto expected =
@@ -160,4 +206,40 @@ TEST(SupplierGeneratorTest, MatchesReferenceTable)
     }
 
     EXPECT_FALSE(iter.Next(&row));
+}
+
+TEST(PartSuppGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("partsupp.tbl").c_str());
+
+    const std::size_t part_count = expected.size() / 4; // 4 suppliers per part
+
+    PartSuppRowIterator iter;
+    iter.Reset(/*start_part=*/0, /*end_part=*/part_count, /*scale_factor=*/1.0, text_pool);
+
+    PartSuppRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.Next(&row));
+        EXPECT_EQ(expected[i], FormatPartSuppRow(row)) << "row " << i;
+    }
+
+    EXPECT_FALSE(iter.Next(&row));
+}
+
+TEST(PartGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("part.tbl").c_str());
+
+    PartRowIterator iter;
+    iter.Reset(/*start_row=*/0, /*end_row=*/expected.size(), text_pool);
+
+    PartRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.NextValue(&row));
+        EXPECT_EQ(expected[i], FormatPartRow(row)) << "row " << i;
+    }
+
+    EXPECT_FALSE(iter.NextValue(&row));
 }

@@ -359,6 +359,47 @@ public:
     }
 };
 
+class PartColumns : public ColumnSetBase
+{
+public:
+    NumericColumnBuilder<arrow::Int32Type> p_partkey;
+    VarcharColumnBuilder p_name;
+    VarcharColumnBuilder p_mfgr;
+    VarcharColumnBuilder p_brand;
+    VarcharColumnBuilder p_type;
+    NumericColumnBuilder<arrow::Int32Type> p_size;
+    VarcharColumnBuilder p_container;
+    NumericColumnBuilder<arrow::DoubleType> p_retailprice;
+    VarcharColumnBuilder p_comment;
+
+    explicit PartColumns(const BuilderFactory & factory)
+        : p_partkey(factory.CreateNumeric<arrow::Int32Type>())
+        , p_name(factory.CreateVarchar())
+        , p_mfgr(factory.CreateVarchar())
+        , p_brand(factory.CreateVarchar())
+        , p_type(factory.CreateVarchar())
+        , p_size(factory.CreateNumeric<arrow::Int32Type>())
+        , p_container(factory.CreateVarchar())
+        , p_retailprice(factory.CreateNumeric<arrow::DoubleType>())
+        , p_comment(factory.CreateVarchar())
+    {
+    }
+
+    void ClearAll()
+    {
+        ResetAll(
+            p_partkey,
+            p_name,
+            p_mfgr,
+            p_brand,
+            p_type,
+            p_size,
+            p_container,
+            p_retailprice,
+            p_comment);
+    }
+};
+
 inline const TableMetadata kCustomer = {
     "customer",
     arrow::schema(
