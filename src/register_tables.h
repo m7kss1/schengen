@@ -42,6 +42,15 @@ inline void RegisterTablePartSupp(TableRegistry & registry)
         });
 }
 
+inline void RegisterTablePart(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kPart,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<PartSuppGenerator>(pool);
+        });
+}
+
 inline void RegisterTables()
 {
     auto & registry = TableRegistry::Instance();
@@ -52,5 +61,6 @@ inline void RegisterTables()
         RegisterTableRegion(registry);
         RegisterTableSupplier(registry);
         RegisterTablePartSupp(registry);
+        RegisterTablePart(registry);
     }
 }
