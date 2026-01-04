@@ -4,6 +4,7 @@
 #include "partsupp.h"
 #include "region.h"
 #include "supplier.h"
+#include "part.h"
 #include "table_registry.h"
 
 inline void RegisterTableNation(TableRegistry & registry)
@@ -47,7 +48,7 @@ inline void RegisterTablePart(TableRegistry & registry)
     registry.RegisterTable(
         kPart,
         [](arrow::MemoryPool * pool) {
-            return std::make_unique<PartSuppGenerator>(pool);
+            return std::make_unique<PartGenerator>(pool);
         });
 }
 
