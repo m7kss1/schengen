@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "customer.h"
+#include "lineitem.h"
 #include "nation.h"
 #include "orders.h"
 #include "part.h"
@@ -210,6 +211,51 @@ static std::string FormatOrderRow(const OrderRow & row)
     return out;
 }
 
+static std::string FormatLineitemRow(const LineitemRow & row)
+{
+    std::string out;
+    out.reserve(256 + row.l_comment.size());
+    out.append(std::to_string(row.l_orderkey));
+    out.push_back('|');
+    out.append(std::to_string(row.l_partkey));
+    out.push_back('|');
+    out.append(std::to_string(row.l_suppkey));
+    out.push_back('|');
+    out.append(std::to_string(row.l_linenumber));
+    out.push_back('|');
+    out.append(std::to_string(row.l_quantity));
+    out.push_back('|');
+    const auto extendedprice = FormatDecimalCents(row.l_extendedprice_cents);
+    out.append(extendedprice);
+    out.push_back('|');
+    const auto discount = FormatDecimalCents(row.l_discount_percent);
+    out.append(discount);
+    out.push_back('|');
+    const auto tax = FormatDecimalCents(row.l_tax_percent);
+    out.append(tax);
+    out.push_back('|');
+    out.append(row.l_returnflag.data(), row.l_returnflag.size());
+    out.push_back('|');
+    out.append(row.l_linestatus.data(), row.l_linestatus.size());
+    out.push_back('|');
+    const auto shipdate = TPCHDate::Format(row.l_shipdate);
+    out.append(shipdate);
+    out.push_back('|');
+    const auto commitdate = TPCHDate::Format(row.l_commitdate);
+    out.append(commitdate);
+    out.push_back('|');
+    const auto receiptdate = TPCHDate::Format(row.l_receiptdate);
+    out.append(receiptdate);
+    out.push_back('|');
+    out.append(row.l_shipinstruct.data(), row.l_shipinstruct.size());
+    out.push_back('|');
+    out.append(row.l_shipmode.data(), row.l_shipmode.size());
+    out.push_back('|');
+    out.append(row.l_comment.data(), row.l_comment.size());
+    out.push_back('|');
+    return out;
+}
+
 TEST(RegionGeneratorTest, MatchesReferenceTable)
 {
     const auto expected =
@@ -329,4 +375,23 @@ TEST(OrderGeneratorTest, MatchesReferenceTable)
     }
 
     EXPECT_FALSE(iter.Next(&row));
+}
+
+TEST(LineitemGeneratorTest, MatchesReferenceTable)
+{
+    const auto expected =
+        ReadLinesOrDie(ExpectedPath("lineitem.tbl").c_str());
+
+    LineitemRowIterator iter;
+    iter.Reset(/*start_order=*/0, /*end_order=*/kOrders.rows_at_sf1, /*scale_factor=*/1.0, text_pool);
+
+    LineitemRow row;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(iter.Next(&row));
+        EXPECT_EQ(expected[i], FormatLineitemRow(row)) << "row " << i;
+    }
+
+    if (expected.size() == kLineitem.rows_at_sf1) {
+        EXPECT_FALSE(iter.Next(&row));
+    }
 }

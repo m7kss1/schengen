@@ -4,6 +4,7 @@
 #include "nation.h"
 #include "orders.h"
 #include "partsupp.h"
+#include "lineitem.h"
 #include "region.h"
 #include "supplier.h"
 #include "part.h"
@@ -72,6 +73,15 @@ inline void RegisterTableOrders(TableRegistry & registry)
         });
 }
 
+inline void RegisterTableLineitem(TableRegistry & registry)
+{
+    registry.RegisterTable(
+        kLineitem,
+        [](arrow::MemoryPool * pool) {
+            return std::make_unique<LineitemGenerator>(pool);
+        });
+}
+
 inline void RegisterTables()
 {
     auto & registry = TableRegistry::Instance();
@@ -85,5 +95,6 @@ inline void RegisterTables()
         RegisterTablePartSupp(registry);
         RegisterTablePart(registry);
         RegisterTableOrders(registry);
+        RegisterTableLineitem(registry);
     }
 }
