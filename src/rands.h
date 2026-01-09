@@ -2,9 +2,9 @@
 
 #include "distribution.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstdint>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -29,18 +29,14 @@ public:
     {
     }
 
-    static RowRandomInt NewWithDefaultSeedAndColumn(std::int32_t column_number,
-                                                    std::int32_t seeds_per_row)
+    static RowRandomInt NewWithDefaultSeedAndColumn(std::int32_t column_number, std::int32_t seeds_per_row)
     {
         return NewWithColumnNumber(column_number, kDefaultSeed, seeds_per_row);
     }
 
-    static RowRandomInt NewWithColumnNumber(std::int32_t column_number,
-                                            std::int64_t seed,
-                                            std::int32_t seeds_per_row)
+    static RowRandomInt NewWithColumnNumber(std::int32_t column_number, std::int64_t seed, std::int32_t seeds_per_row)
     {
-        const std::int64_t adjusted =
-            seed + static_cast<std::int64_t>(column_number) * (kModulus / 799);
+        const std::int64_t adjusted = seed + static_cast<std::int64_t>(column_number) * (kModulus / 799);
         return RowRandomInt(adjusted, seeds_per_row);
     }
 
@@ -56,15 +52,11 @@ public:
     {
         NextRand();
 
-        const auto range_u =
-            static_cast<std::uint32_t>(hi - lo) + 1U;
+        const auto range_u = static_cast<std::uint32_t>(hi - lo) + 1U;
         const auto range = static_cast<std::int32_t>(range_u);
-        const double value =
-            (static_cast<double>(seed_) / static_cast<double>(kModulus)) *
-            static_cast<double>(range);
+        const double value = (static_cast<double>(seed_) / static_cast<double>(kModulus)) * static_cast<double>(range);
         const auto value_i = static_cast<std::int32_t>(value);
-        const std::uint32_t result_u =
-            static_cast<std::uint32_t>(lo) + static_cast<std::uint32_t>(value_i);
+        const std::uint32_t result_u = static_cast<std::uint32_t>(lo) + static_cast<std::uint32_t>(value_i);
         return static_cast<std::int32_t>(result_u);
     }
 
@@ -78,9 +70,9 @@ public:
     /* Skips the remaining draws for the current row */
     void RowFinished()
     {
-        const std::int64_t remaining =
-            static_cast<std::int64_t>(seeds_per_row_ - usage_);
-        if (remaining > 0) {
+        const std::int64_t remaining = static_cast<std::int64_t>(seeds_per_row_ - usage_);
+        if (remaining > 0)
+        {
             AdvanceSeed(remaining);
         }
         usage_ = 0;
@@ -89,12 +81,13 @@ public:
     /* Skips full rows deterministically (for partitioned generation) */
     void AdvanceRows(std::int64_t row_count)
     {
-        if (usage_ != 0) {
+        if (usage_ != 0)
+        {
             RowFinished();
         }
-        const std::int64_t count =
-            static_cast<std::int64_t>(seeds_per_row_) * row_count;
-        if (count > 0) {
+        const std::int64_t count = static_cast<std::int64_t>(seeds_per_row_) * row_count;
+        if (count > 0)
+        {
             AdvanceSeed(count);
         }
     }
@@ -107,8 +100,10 @@ private:
         std::int64_t multiplier = kMultiplier;
         std::int64_t remaining = count;
 
-        while (remaining > 0) {
-            if (remaining % 2 != 0) {
+        while (remaining > 0)
+        {
+            if (remaining % 2 != 0)
+            {
                 seed_ = (multiplier * seed_) % kModulus;
             }
             remaining /= 2;
@@ -157,9 +152,9 @@ public:
 
     void RowFinished()
     {
-        const std::int64_t remaining =
-            static_cast<std::int64_t>(seeds_per_row_ - usage_);
-        if (remaining > 0) {
+        const std::int64_t remaining = static_cast<std::int64_t>(seeds_per_row_ - usage_);
+        if (remaining > 0)
+        {
             AdvanceSeed32(remaining);
         }
         usage_ = 0;
@@ -167,12 +162,13 @@ public:
 
     void AdvanceRows(std::int64_t row_count)
     {
-        if (usage_ != 0) {
+        if (usage_ != 0)
+        {
             RowFinished();
         }
-        const std::int64_t count =
-            static_cast<std::int64_t>(seeds_per_row_) * row_count;
-        if (count > 0) {
+        const std::int64_t count = static_cast<std::int64_t>(seeds_per_row_) * row_count;
+        if (count > 0)
+        {
             AdvanceSeed32(count);
         }
     }
@@ -183,8 +179,10 @@ private:
         std::int64_t multiplier = kMultiplier32;
         std::int64_t remaining = count;
 
-        while (remaining > 0) {
-            if (remaining % 2 != 0) {
+        while (remaining > 0)
+        {
+            if (remaining % 2 != 0)
+            {
                 seed_ = (multiplier * seed_) % kModulus32;
             }
             remaining /= 2;
@@ -205,11 +203,8 @@ class RandomBoundedLong
 public:
     RandomBoundedLong() = default;
 
-    RandomBoundedLong(std::int64_t seed,
-                      bool use_64bits,
-                      std::int64_t lower_bound,
-                      std::int64_t upper_bound,
-                      std::int32_t seeds_per_row = 1)
+    RandomBoundedLong(
+        std::int64_t seed, bool use_64bits, std::int64_t lower_bound, std::int64_t upper_bound, std::int32_t seeds_per_row = 1)
         : use_64bits_(use_64bits)
         , lower_bound_(lower_bound)
         , upper_bound_(upper_bound)
@@ -220,29 +215,34 @@ public:
 
     std::int64_t NextValue()
     {
-        if (use_64bits_) {
+        if (use_64bits_)
+        {
             return random_long_.NextLong(lower_bound_, upper_bound_);
         }
         return static_cast<std::int64_t>(
-            random_int_.NextInt(
-                static_cast<std::int32_t>(lower_bound_),
-                static_cast<std::int32_t>(upper_bound_)));
+            random_int_.NextInt(static_cast<std::int32_t>(lower_bound_), static_cast<std::int32_t>(upper_bound_)));
     }
 
     void AdvanceRows(std::int64_t row_count)
     {
-        if (use_64bits_) {
+        if (use_64bits_)
+        {
             random_long_.AdvanceRows(row_count);
-        } else {
+        }
+        else
+        {
             random_int_.AdvanceRows(row_count);
         }
     }
 
     void RowFinished()
     {
-        if (use_64bits_) {
+        if (use_64bits_)
+        {
             random_long_.RowFinished();
-        } else {
+        }
+        else
+        {
             random_int_.RowFinished();
         }
     }
@@ -260,10 +260,7 @@ class RandomBoundedInt
 public:
     RandomBoundedInt() = default;
 
-    RandomBoundedInt(std::int64_t seed,
-                     std::int32_t lower_bound,
-                     std::int32_t upper_bound,
-                     std::int32_t seeds_per_row = 1)
+    RandomBoundedInt(std::int64_t seed, std::int32_t lower_bound, std::int32_t upper_bound, std::int32_t seeds_per_row = 1)
         : lower_bound_(lower_bound)
         , upper_bound_(upper_bound)
         , inner_(seed, seeds_per_row)
@@ -286,18 +283,18 @@ class RandomAlphaNumericInstance
 public:
     void ToString(std::string & out) const
     {
-        static constexpr std::string_view kAlphabet =
-            "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
+        static constexpr std::string_view kAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
 
         out.resize(length_);
 
         RowRandomInt generator = snapshot_;
         std::int64_t char_index = 0;
 
-        for (std::int32_t i = 0; i < length_; ++i) {
-            if (i % 5 == 0) {
-                char_index =
-                    static_cast<std::int64_t>(generator.NextInt(0, std::numeric_limits<std::int32_t>::max()));
+        for (std::int32_t i = 0; i < length_; ++i)
+        {
+            if (i % 5 == 0)
+            {
+                char_index = static_cast<std::int64_t>(generator.NextInt(0, std::numeric_limits<std::int32_t>::max()));
             }
 
             const std::size_t char_pos = static_cast<std::size_t>(char_index & 0x3f);
@@ -322,14 +319,10 @@ public:
 
     RandomAlphaNumeric() = default;
 
-    RandomAlphaNumeric(std::int64_t seed,
-                       std::int32_t average_length,
-                       std::int32_t expected_row_count = 1)
+    RandomAlphaNumeric(std::int64_t seed, std::int32_t average_length, std::int32_t expected_row_count = 1)
         : inner_(seed, kUsagePerRow * expected_row_count)
-        , min_length_(static_cast<std::int32_t>(
-              static_cast<double>(average_length) * kLowLengthMultiplier))
-        , max_length_(static_cast<std::int32_t>(
-              static_cast<double>(average_length) * kHighLengthMultiplier))
+        , min_length_(static_cast<std::int32_t>(static_cast<double>(average_length) * kLowLengthMultiplier))
+        , max_length_(static_cast<std::int32_t>(static_cast<double>(average_length) * kHighLengthMultiplier))
     {
     }
 
@@ -360,14 +353,7 @@ struct PhoneNumberInstance
     void ToString(std::string & out) const
     {
         char buffer[32];
-        const int n = std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "%02d-%03d-%03d-%04d",
-            country_code,
-            local1,
-            local2,
-            local3);
+        const int n = std::snprintf(buffer, sizeof(buffer), "%02d-%03d-%03d-%04d", country_code, local1, local2, local3);
         out.assign(buffer, buffer + (n > 0 ? n : 0));
     }
 };
@@ -379,8 +365,7 @@ public:
 
     RandomPhoneNumber() = default;
 
-    explicit RandomPhoneNumber(std::int64_t seed,
-                               std::int32_t expected_row_count = 1)
+    explicit RandomPhoneNumber(std::int64_t seed, std::int32_t expected_row_count = 1)
         : inner_(seed, 3 * expected_row_count)
     {
     }
@@ -407,9 +392,7 @@ class RandomString
 public:
     RandomString() = default;
 
-    RandomString(std::int64_t seed,
-                 const DistributionView & distribution,
-                 std::int32_t expected_row_count = 1)
+    RandomString(std::int64_t seed, const DistributionView & distribution, std::int32_t expected_row_count = 1)
         : inner_(seed, expected_row_count)
         , distribution_(&distribution)
     {
@@ -421,7 +404,8 @@ public:
      */
     std::string_view NextValue()
     {
-        if (distribution_ == nullptr || distribution_->size == 0) {
+        if (distribution_ == nullptr || distribution_->size == 0)
+        {
             return {};
         }
         return PickToken(*distribution_, inner_);
@@ -437,9 +421,11 @@ private:
         const std::int32_t sample = random.NextInt(0, total - 1);
         std::int32_t cumulative = 0;
 
-        for (std::size_t i = 0; i < dist.size; ++i) {
+        for (std::size_t i = 0; i < dist.size; ++i)
+        {
             cumulative += dist.entries[i].weight;
-            if (sample < cumulative) {
+            if (sample < cumulative)
+            {
                 return dist.entries[i].token;
             }
         }
@@ -462,12 +448,14 @@ public:
     void ToString(std::string & out) const
     {
         out.clear();
-        if (values_.empty()) {
+        if (values_.empty())
+        {
             return;
         }
 
         out.append(values_[0].data(), values_[0].size());
-        for (std::size_t i = 1; i < values_.size(); ++i) {
+        for (std::size_t i = 1; i < values_.size(); ++i)
+        {
             out.push_back(' ');
             out.append(values_[i].data(), values_[i].size());
         }
@@ -486,10 +474,7 @@ class RandomStringSequence
 public:
     RandomStringSequence() = default;
 
-    RandomStringSequence(std::int64_t seed,
-                         std::int32_t count,
-                         const DistributionView & distribution,
-                         std::int32_t expected_row_count = 1)
+    RandomStringSequence(std::int64_t seed, std::int32_t count, const DistributionView & distribution, std::int32_t expected_row_count = 1)
         : inner_(seed, static_cast<std::int32_t>(distribution.size) * expected_row_count)
         , count_(count)
         , distribution_(&distribution)
@@ -502,21 +487,22 @@ public:
     StringSequenceInstance NextValue()
     {
         StringSequenceInstance instance;
-        if (distribution_ == nullptr || distribution_->size == 0 || count_ <= 0) {
+        if (distribution_ == nullptr || distribution_->size == 0 || count_ <= 0)
+        {
             return instance;
         }
 
         instance.values_.reserve(distribution_->size);
-        for (std::size_t i = 0; i < distribution_->size; ++i) {
+        for (std::size_t i = 0; i < distribution_->size; ++i)
+        {
             instance.values_.push_back(distribution_->entries[i].token);
         }
 
-        const std::int32_t limit =
-            std::min<std::int32_t>(count_, static_cast<std::int32_t>(instance.values_.size()));
+        const std::int32_t limit = std::min<std::int32_t>(count_, static_cast<std::int32_t>(instance.values_.size()));
 
-        for (std::int32_t current = 0; current < limit; ++current) {
-            const std::int32_t swap_with_idx =
-                inner_.NextInt(current, static_cast<std::int32_t>(instance.values_.size() - 1));
+        for (std::int32_t current = 0; current < limit; ++current)
+        {
+            const std::int32_t swap_with_idx = inner_.NextInt(current, static_cast<std::int32_t>(instance.values_.size() - 1));
             std::swap(instance.values_[current], instance.values_[swap_with_idx]);
         }
 
@@ -537,7 +523,7 @@ class TextPool
 {
 public:
     /* By default limit text pool size to 300MB */
-    static constexpr std::int32_t kDefaultTextPoolSize = 300 * 1024 * 1024; 
+    static constexpr std::int32_t kDefaultTextPoolSize = 300 * 1024 * 1024;
     static constexpr std::int32_t kMaxSentenceLength = 256;
 
     static const TextPool & Default()
@@ -551,7 +537,8 @@ public:
         RowRandomInt random(933588178, std::numeric_limits<std::int32_t>::max());
         text_.reserve(static_cast<std::size_t>(size) + kMaxSentenceLength);
 
-        while (static_cast<std::int32_t>(text_.size()) < size) {
+        while (static_cast<std::int32_t>(text_.size()) < size)
+        {
             GenerateSentence(text_, random);
         }
         text_.resize(static_cast<std::size_t>(size));
@@ -573,9 +560,11 @@ private:
         const std::int32_t sample = random.NextInt(0, total - 1);
         std::int32_t cumulative = 0;
 
-        for (std::size_t i = 0; i < dist.size; ++i) {
+        for (std::size_t i = 0; i < dist.size; ++i)
+        {
             cumulative += dist.entries[i].weight;
-            if (sample < cumulative) {
+            if (sample < cumulative)
+            {
                 return dist.entries[i].token;
             }
         }
@@ -587,9 +576,11 @@ private:
     {
         const std::string_view syntax = PickToken(kGrammarDist, random);
 
-        for (std::size_t i = 0; i < syntax.size(); i += 2) {
+        for (std::size_t i = 0; i < syntax.size(); i += 2)
+        {
             const char token = syntax[i];
-            switch (token) {
+            switch (token)
+            {
                 case 'V':
                     GenerateVerbPhrase(output, random);
                     break;
@@ -604,7 +595,8 @@ private:
                     break;
                 }
                 case 'T': {
-                    if (!output.empty() && output.back() == ' ') {
+                    if (!output.empty() && output.back() == ' ')
+                    {
                         output.pop_back();
                     }
                     const std::string_view terminator = PickToken(kTerminatorsDist, random);
@@ -615,7 +607,8 @@ private:
                     break;
             }
 
-            if (!output.empty() && output.back() != ' ') {
+            if (!output.empty() && output.back() != ' ')
+            {
                 output.push_back(' ');
             }
         }
@@ -625,11 +618,13 @@ private:
     {
         const std::string_view syntax = PickToken(kVerbPhraseDist, random);
 
-        for (std::size_t i = 0; i < syntax.size(); i += 2) {
+        for (std::size_t i = 0; i < syntax.size(); i += 2)
+        {
             const char token = syntax[i];
             const DistributionView * source = nullptr;
 
-            switch (token) {
+            switch (token)
+            {
                 case 'D':
                     source = &kAdverbsDist;
                     break;
@@ -643,7 +638,8 @@ private:
                     break;
             }
 
-            if (source == nullptr) {
+            if (source == nullptr)
+            {
                 continue;
             }
 
@@ -657,10 +653,12 @@ private:
     {
         const std::string_view syntax = PickToken(kNounPhraseDist, random);
 
-        for (char token : syntax) {
+        for (char token : syntax)
+        {
             const DistributionView * source = nullptr;
 
-            switch (token) {
+            switch (token)
+            {
                 case 'A':
                     source = &kArticlesDist;
                     break;
@@ -674,7 +672,8 @@ private:
                     source = &kNounsDist;
                     break;
                 case ',':
-                    if (!output.empty() && output.back() == ' ') {
+                    if (!output.empty() && output.back() == ' ')
+                    {
                         output.pop_back();
                     }
                     output.append(", ");
@@ -702,10 +701,7 @@ public:
 
     RandomText() = default;
 
-    RandomText(std::int64_t seed,
-               const TextPool & text_pool,
-               double average_text_length,
-               std::int32_t expected_row_count = 1)
+    RandomText(std::int64_t seed, const TextPool & text_pool, double average_text_length, std::int32_t expected_row_count = 1)
         : inner_(seed, expected_row_count * 2)
         , text_pool_(&text_pool)
         , min_length_(static_cast<std::int32_t>(average_text_length * kLowLengthMultiplier))
@@ -715,12 +711,12 @@ public:
 
     std::string_view NextValue()
     {
-        if (text_pool_ == nullptr || text_pool_->GetSize() <= max_length_) {
+        if (text_pool_ == nullptr || text_pool_->GetSize() <= max_length_)
+        {
             return {};
         }
 
-        const std::int32_t offset =
-            inner_.NextInt(0, text_pool_->GetSize() - max_length_);
+        const std::int32_t offset = inner_.NextInt(0, text_pool_->GetSize() - max_length_);
         const auto length = inner_.NextInt(min_length_, max_length_);
         return text_pool_->GetView(offset, offset + length);
     }

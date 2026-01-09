@@ -1,8 +1,8 @@
 #pragma once
 
 #include <algorithm>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -28,34 +28,27 @@ struct SupplierRow
 class SupplierRowIterator
 {
 public:
-    void Reset(std::uint64_t start_row,
-               std::uint64_t end_row,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_row, std::uint64_t end_row, const TextPool & text_pool)
     {
         next_row_ = start_row;
         end_row_ = end_row;
-        if (next_row_ > end_row_) {
+        if (next_row_ > end_row_)
+        {
             next_row_ = end_row_;
         }
 
         address_random_ = RandomAlphaNumeric(kAddressSeed, kAddressAverageLength);
-        nation_key_random_ = RandomBoundedInt(
-            kNationKeySeed,
-            0,
-            static_cast<std::int32_t>(kNations.size() - 1));
+        nation_key_random_ = RandomBoundedInt(kNationKeySeed, 0, static_cast<std::int32_t>(kNations.size() - 1));
         phone_random_ = RandomPhoneNumber(kPhoneSeed);
-        account_balance_random_ = RandomBoundedInt(
-            kAccountBalanceSeed,
-            kAccountBalanceMin,
-            kAccountBalanceMax);
-        comment_random_ =
-            RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
+        account_balance_random_ = RandomBoundedInt(kAccountBalanceSeed, kAccountBalanceMin, kAccountBalanceMax);
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
         bbb_comment_random_ = RandomBoundedInt(kBbbCommentSeed, 1, kScaleBase);
         bbb_junk_random_ = RowRandomInt(kBbbJunkSeed, /*seeds_per_row=*/1);
         bbb_offset_random_ = RowRandomInt(kBbbOffsetSeed, /*seeds_per_row=*/1);
         bbb_type_random_ = RandomBoundedInt(kBbbTypeSeed, 0, 100);
 
-        if (next_row_ > 0) {
+        if (next_row_ > 0)
+        {
             const auto rows = static_cast<std::int64_t>(next_row_);
             address_random_.AdvanceRows(rows);
             nation_key_random_.AdvanceRows(rows);
@@ -71,13 +64,15 @@ public:
 
     bool Next(SupplierRow * out)
     {
-        if (next_row_ >= end_row_) {
+        if (next_row_ >= end_row_)
+        {
             return false;
         }
 
         const std::int32_t supplier_key = static_cast<std::int32_t>(next_row_ + 1);
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             name_buffer_ = FormatSupplierName(supplier_key);
 
             const auto address = address_random_.NextValue();
@@ -97,10 +92,11 @@ public:
                 const std::string_view comment_view = comment_random_.NextValue();
                 comment_buffer_.assign(comment_view.data(), comment_view.size());
             }
-            
+
             /* Add some BBB mutation in comment if needed */
             const std::int32_t bbb_value = bbb_comment_random_.NextValue();
-            if (bbb_value <= kBbbCommentsPerScaleBase) {
+            if (bbb_value <= kBbbCommentsPerScaleBase)
+            {
                 ApplyBBBComment(comment_buffer_);
             }
 
@@ -135,32 +131,24 @@ private:
     static std::string FormatSupplierName(std::int32_t supplier_key)
     {
         char buffer[32];
-        const int n = std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "Supplier#%09d",
-            supplier_key);
+        const int n = std::snprintf(buffer, sizeof(buffer), "Supplier#%09d", supplier_key);
         return std::string(buffer, buffer + (n > 0 ? n : 0));
     }
 
     void ApplyBBBComment(std::string & comment)
     {
-        if (comment.size() < kBbbCommentLength) {
+        if (comment.size() < kBbbCommentLength)
+        {
             return;
         }
 
-        const std::int32_t max_noise =
-            static_cast<std::int32_t>(comment.size() - kBbbCommentLength);
+        const std::int32_t max_noise = static_cast<std::int32_t>(comment.size() - kBbbCommentLength);
         const std::int32_t noise = bbb_junk_random_.NextInt(0, max_noise);
 
-        const std::int32_t max_offset =
-            static_cast<std::int32_t>(comment.size() - (kBbbCommentLength + noise));
+        const std::int32_t max_offset = static_cast<std::int32_t>(comment.size() - (kBbbCommentLength + noise));
         const std::int32_t offset = bbb_offset_random_.NextInt(0, max_offset);
 
-        const char * type_text =
-            (bbb_type_random_.NextValue() < kBbbComplaintPercent)
-            ? kBbbComplaintText
-            : kBbbRecommendText;
+        const char * type_text = (bbb_type_random_.NextValue() < kBbbComplaintPercent) ? kBbbComplaintText : kBbbRecommendText;
 
         std::string modified;
         modified.reserve(comment.size());
@@ -174,8 +162,7 @@ private:
         modified.append(kBbbBaseText, base);
         modified.append(comment.data() + off + base, n);
         modified.append(type_text, type_len);
-        modified.append(comment.data() + off + base + n + type_len,
-                        comment.size() - (off + base + n + type_len));
+        modified.append(comment.data() + off + base + n + type_len, comment.size() - (off + base + n + type_len));
 
         comment.swap(modified);
     }
@@ -189,8 +176,7 @@ private:
     static constexpr const char * kBbbBaseText = "Customer ";
     static constexpr const char * kBbbComplaintText = "Complaints";
     static constexpr const char * kBbbRecommendText = "Recommends";
-    static constexpr std::int32_t kBbbCommentLength =
-        9 /* strlen("Customer ") */ + 10 /* strlen("Complaints") */;
+    static constexpr std::int32_t kBbbCommentLength = 9 /* strlen("Customer ") */ + 10 /* strlen("Complaints") */;
     static constexpr std::int32_t kBbbCommentsPerScaleBase = 10;
     static constexpr std::int32_t kBbbComplaintPercent = 50;
 
@@ -239,16 +225,15 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
 
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
 
         row_iter_.Reset(ctx.partition.range.start_row, ctx.partition.range.end_row, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -258,7 +243,8 @@ public:
         std::uint64_t batch_count = 0;
 
         SupplierRow row;
-        while (batch_count < max_rows && row_iter_.Next(&row)) {
+        while (batch_count < max_rows && row_iter_.Next(&row))
+        {
             columns_.s_suppkey.Append(row.s_suppkey);
             columns_.s_name.Append(row.s_name);
             columns_.s_address.Append(row.s_address);
@@ -269,7 +255,8 @@ public:
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kSupplier;
             out->first_row_id = batch_start;
             out->row_count = batch_count;

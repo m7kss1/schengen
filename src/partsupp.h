@@ -20,36 +20,24 @@ struct PartSuppRow
 class PartSuppRowIterator
 {
 public:
-    void Reset(std::uint64_t start_part,
-               std::uint64_t end_part,
-               double scale_factor,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_part, std::uint64_t end_part, double scale_factor, const TextPool & text_pool)
     {
         next_part_ = start_part;
         end_part_ = end_part;
-        if (next_part_ > end_part_) {
+        if (next_part_ > end_part_)
+        {
             next_part_ = end_part_;
         }
 
         scale_factor_ = scale_factor;
 
-        available_quantity_random_ = RandomBoundedInt(
-            kAvailableQuantitySeed,
-            kAvailableQuantityMin,
-            kAvailableQuantityMax,
-            kSuppliersPerPart);
-        supply_cost_random_ = RandomBoundedInt(
-            kSupplyCostSeed,
-            kSupplyCostMin,
-            kSupplyCostMax,
-            kSuppliersPerPart);
-        comment_random_ = RandomText(
-            kCommentSeed,
-            text_pool,
-            static_cast<double>(kCommentAverageLength),
-            kSuppliersPerPart);
+        available_quantity_random_
+            = RandomBoundedInt(kAvailableQuantitySeed, kAvailableQuantityMin, kAvailableQuantityMax, kSuppliersPerPart);
+        supply_cost_random_ = RandomBoundedInt(kSupplyCostSeed, kSupplyCostMin, kSupplyCostMax, kSuppliersPerPart);
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength), kSuppliersPerPart);
 
-        if (next_part_ > 0) {
+        if (next_part_ > 0)
+        {
             const auto rows = static_cast<std::int64_t>(next_part_);
             available_quantity_random_.AdvanceRows(rows);
             supply_cost_random_.AdvanceRows(rows);
@@ -59,17 +47,16 @@ public:
 
     bool Next(PartSuppRow * out)
     {
-        if (next_part_ >= end_part_) {
+        if (next_part_ >= end_part_)
+        {
             return false;
         }
 
         const std::int32_t part_key = static_cast<std::int32_t>(next_part_ + 1);
-        const std::int32_t supplier_key = SelectPartSupplier(
-            part_key,
-            part_supplier_number_,
-            scale_factor_);
+        const std::int32_t supplier_key = SelectPartSupplier(part_key, part_supplier_number_, scale_factor_);
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             const std::int32_t availqty = available_quantity_random_.NextValue();
             const std::int32_t supplycost_cents = supply_cost_random_.NextValue();
             const std::string_view comment = comment_random_.NextValue();
@@ -97,9 +84,10 @@ public:
          * │          2 │       2503 │        4969 │        915.27 │ deposits doze. slyly ...         │
          * ├────────────┴────────────┴─────────────┴───────────────┴──────────────────────────────────┤
          */
- 
+
         ++part_supplier_number_;
-        if (part_supplier_number_ >= kSuppliersPerPart) {
+        if (part_supplier_number_ >= kSuppliersPerPart)
+        {
             available_quantity_random_.RowFinished();
             supply_cost_random_.RowFinished();
             comment_random_.RowFinished();
@@ -115,33 +103,26 @@ public:
 
     std::uint64_t NextRowId() const
     {
-        return next_part_ * static_cast<std::uint64_t>(kSuppliersPerPart) +
-            static_cast<std::uint64_t>(part_supplier_number_);
+        return next_part_ * static_cast<std::uint64_t>(kSuppliersPerPart) + static_cast<std::uint64_t>(part_supplier_number_);
     }
 
 private:
-    
     /*
      * Deterministic mapping from {part_key, supplier_number} -> supplier key
      * supplier_number is always {0..3} (4 distinct suppliers per part)
      */
-    static std::int32_t SelectPartSupplier(std::int32_t part_key,
-                                           std::int32_t supplier_number,
-                                           double scale_factor)
+    static std::int32_t SelectPartSupplier(std::int32_t part_key, std::int32_t supplier_number, double scale_factor)
     {
         /* Describes max suppkey value depending from scale-factor */
-        const auto supplier_key_max_value =
-            static_cast<std::int64_t>(kSupplierScaleBase * scale_factor);
+        const auto supplier_key_max_value = static_cast<std::int64_t>(kSupplierScaleBase * scale_factor);
 
         const std::int64_t part_key_i = part_key;
         const std::int64_t supplier_number_i = supplier_number;
 
-        const std::int64_t supplier_key =
-            ((part_key_i
-              + (supplier_number_i
-                 * ((supplier_key_max_value / kSuppliersPerPart)
-                    + ((part_key_i - 1) / supplier_key_max_value))))
-             % supplier_key_max_value)
+        const std::int64_t supplier_key
+            = ((part_key_i
+                + (supplier_number_i * ((supplier_key_max_value / kSuppliersPerPart) + ((part_key_i - 1) / supplier_key_max_value))))
+               % supplier_key_max_value)
             + 1;
 
         return static_cast<std::int32_t>(supplier_key);
@@ -186,21 +167,19 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
 
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
 
         /* Partition is computed in part-space (one part -> 4 partsupp rows) */
         const auto total_parts = ctx.scale.RowCount(kPart);
-        const auto part_range =
-            MakePartitionRange(total_parts, ctx.partition.part_num, ctx.partition.part_count);
+        const auto part_range = MakePartitionRange(total_parts, ctx.partition.part_num, ctx.partition.part_count);
 
         row_iter_.Reset(part_range.start_row, part_range.end_row, ctx.scale.factor, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -210,7 +189,8 @@ public:
         std::uint64_t batch_count = 0;
 
         PartSuppRow row;
-        while (batch_count < max_rows && row_iter_.Next(&row)) {
+        while (batch_count < max_rows && row_iter_.Next(&row))
+        {
             columns_.ps_partkey.Append(row.ps_partkey);
             columns_.ps_suppkey.Append(row.ps_suppkey);
             columns_.ps_availqty.Append(row.ps_availqty);
@@ -219,7 +199,8 @@ public:
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kPartsupp;
             out->first_row_id = batch_start;
             out->row_count = batch_count;

@@ -60,14 +60,12 @@ struct LineitemRow
 class LineitemRowIterator
 {
 public:
-    void Reset(std::uint64_t start_order,
-               std::uint64_t end_order,
-               double scale_factor,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_order, std::uint64_t end_order, double scale_factor, const TextPool & text_pool)
     {
         start_order_ = start_order;
         end_order_ = end_order;
-        if (start_order_ > end_order_) {
+        if (start_order_ > end_order_)
+        {
             start_order_ = end_order_;
         }
 
@@ -84,40 +82,19 @@ public:
         tax_random_ = CreateTaxRandom();
 
         part_key_random_ = CreatePartKeyRandom(scale_factor);
-        supplier_number_random_ =
-            RandomBoundedInt(kSupplierNumberSeed, 0, kSuppliersPerPart - 1, kLineCountMax);
+        supplier_number_random_ = RandomBoundedInt(kSupplierNumberSeed, 0, kSuppliersPerPart - 1, kLineCountMax);
 
         ship_date_random_ = CreateShipDateRandom();
-        commit_date_random_ = RandomBoundedInt(
-            kCommitDateSeed,
-            kCommitDateMin,
-            kCommitDateMax,
-            kLineCountMax);
-        receipt_date_random_ = RandomBoundedInt(
-            kReceiptDateSeed,
-            kReceiptDateMin,
-            kReceiptDateMax,
-            kLineCountMax);
+        commit_date_random_ = RandomBoundedInt(kCommitDateSeed, kCommitDateMin, kCommitDateMax, kLineCountMax);
+        receipt_date_random_ = RandomBoundedInt(kReceiptDateSeed, kReceiptDateMin, kReceiptDateMax, kLineCountMax);
 
-        return_flag_random_ = RandomString(
-            kReturnFlagSeed,
-            kReturnFlagsDist,
-            kLineCountMax);
-        ship_instruct_random_ = RandomString(
-            kShipInstructSeed,
-            kShipInstructionsDist,
-            kLineCountMax);
-        ship_mode_random_ = RandomString(
-            kShipModeSeed,
-            kShipModesDist,
-            kLineCountMax);
-        comment_random_ = RandomText(
-            kCommentSeed,
-            text_pool,
-            static_cast<double>(kCommentAverageLength),
-            kLineCountMax);
+        return_flag_random_ = RandomString(kReturnFlagSeed, kReturnFlagsDist, kLineCountMax);
+        ship_instruct_random_ = RandomString(kShipInstructSeed, kShipInstructionsDist, kLineCountMax);
+        ship_mode_random_ = RandomString(kShipModeSeed, kShipModesDist, kLineCountMax);
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength), kLineCountMax);
 
-        if (start_order_ > 0) {
+        if (start_order_ > 0)
+        {
             const auto rows = static_cast<std::int64_t>(start_order_);
             order_date_random_.AdvanceRows(rows);
             line_count_random_.AdvanceRows(rows);
@@ -139,7 +116,8 @@ public:
             comment_random_.AdvanceRows(rows);
         }
 
-        if (order_count_ > 0) {
+        if (order_count_ > 0)
+        {
             order_date_ = order_date_random_.NextValue();
             line_count_ = line_count_random_.NextValue() - 1;
         }
@@ -147,12 +125,12 @@ public:
 
     bool Next(LineitemRow * out)
     {
-        if (index_ >= order_count_) {
+        if (index_ >= order_count_)
+        {
             return false;
         }
 
-        const std::int64_t order_index =
-            static_cast<std::int64_t>(start_order_ + index_ + 1);
+        const std::int64_t order_index = static_cast<std::int64_t>(start_order_ + index_ + 1);
         const std::int64_t order_key = MakeOrderKey(order_index);
 
         const std::int32_t quantity = quantity_random_.NextValue();
@@ -161,8 +139,7 @@ public:
 
         const std::int64_t part_key = part_key_random_.NextValue();
         const std::int32_t supplier_number = supplier_number_random_.NextValue();
-        const std::int32_t supplier_key =
-            SelectPartSupplier(part_key, supplier_number, scale_factor_);
+        const std::int32_t supplier_key = SelectPartSupplier(part_key, supplier_number, scale_factor_);
 
         const std::int64_t part_price = CalculatePartPrice(part_key);
         const std::int64_t extended_price_cents = part_price * quantity;
@@ -174,19 +151,16 @@ public:
         std::int32_t receipt_date = receipt_date_random_.NextValue();
         receipt_date += ship_date;
 
-        const std::string_view return_flag =
-            TPCHDate::IsInPast(receipt_date)
-            ? return_flag_random_.NextValue()
-            : kReturnFlagNone;
+        const std::string_view return_flag = TPCHDate::IsInPast(receipt_date) ? return_flag_random_.NextValue() : kReturnFlagNone;
 
-        const std::string_view line_status =
-            TPCHDate::IsInPast(ship_date) ? kLineStatusFulfilled : kLineStatusOpen;
+        const std::string_view line_status = TPCHDate::IsInPast(ship_date) ? kLineStatusFulfilled : kLineStatusOpen;
 
         const std::string_view ship_instruct = ship_instruct_random_.NextValue();
         const std::string_view ship_mode = ship_mode_random_.NextValue();
         const std::string_view comment = comment_random_.NextValue();
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->l_orderkey = static_cast<std::int32_t>(order_key);
             out->l_partkey = static_cast<std::int32_t>(part_key);
             out->l_suppkey = supplier_key;
@@ -213,7 +187,8 @@ public:
 
         ++line_number_;
 
-        if (line_number_ > line_count_) {
+        if (line_number_ > line_count_)
+        {
             order_date_random_.RowFinished();
             line_count_random_.RowFinished();
 
@@ -235,7 +210,8 @@ public:
 
             ++index_;
 
-            if (index_ < order_count_) {
+            if (index_ < order_count_)
+            {
                 line_count_ = line_count_random_.NextValue() - 1;
                 order_date_ = order_date_random_.NextValue();
                 line_number_ = 0;
@@ -250,76 +226,44 @@ public:
     std::uint64_t NextRowId() const
     {
         const std::uint64_t order_index = start_order_ + index_;
-        return order_index * static_cast<std::uint64_t>(kLineCountMax) +
-            static_cast<std::uint64_t>(line_number_);
+        return order_index * static_cast<std::uint64_t>(kLineCountMax) + static_cast<std::uint64_t>(line_number_);
     }
 
 private:
-    static RandomBoundedInt CreateOrderDateRandom()
-    {
-        return RandomBoundedInt(kOrderDateSeed, kOrderDateMin, kOrderDateMax);
-    }
+    static RandomBoundedInt CreateOrderDateRandom() { return RandomBoundedInt(kOrderDateSeed, kOrderDateMin, kOrderDateMax); }
 
-    static RandomBoundedInt CreateLineCountRandom()
-    {
-        return RandomBoundedInt(kLineCountSeed, kLineCountMin, kLineCountMax);
-    }
+    static RandomBoundedInt CreateLineCountRandom() { return RandomBoundedInt(kLineCountSeed, kLineCountMin, kLineCountMax); }
 
     static RandomBoundedInt CreateQuantityRandom()
     {
-        return RandomBoundedInt(
-            kLineQuantitySeed,
-            kQuantityMin,
-            kQuantityMax,
-            kLineCountMax);
+        return RandomBoundedInt(kLineQuantitySeed, kQuantityMin, kQuantityMax, kLineCountMax);
     }
 
     static RandomBoundedInt CreateDiscountRandom()
     {
-        return RandomBoundedInt(
-            kLineDiscountSeed,
-            kDiscountMin,
-            kDiscountMax,
-            kLineCountMax);
+        return RandomBoundedInt(kLineDiscountSeed, kDiscountMin, kDiscountMax, kLineCountMax);
     }
 
-    static RandomBoundedInt CreateTaxRandom()
-    {
-        return RandomBoundedInt(
-            kLineTaxSeed,
-            kTaxMin,
-            kTaxMax,
-            kLineCountMax);
-    }
+    static RandomBoundedInt CreateTaxRandom() { return RandomBoundedInt(kLineTaxSeed, kTaxMin, kTaxMax, kLineCountMax); }
 
     static RandomBoundedLong CreatePartKeyRandom(double scale_factor)
     {
-        std::int64_t max_part_key =
-            static_cast<std::int64_t>(static_cast<double>(kPart.rows_at_sf1) * scale_factor);
-        if (max_part_key < 1) {
+        std::int64_t max_part_key = static_cast<std::int64_t>(static_cast<double>(kPart.rows_at_sf1) * scale_factor);
+        if (max_part_key < 1)
+        {
             max_part_key = 1;
         }
-        return RandomBoundedLong(
-            kLinePartKeySeed,
-            scale_factor >= 30000.0,
-            kPartKeyMin,
-            max_part_key,
-            kLineCountMax);
+        return RandomBoundedLong(kLinePartKeySeed, scale_factor >= 30000.0, kPartKeyMin, max_part_key, kLineCountMax);
     }
 
     static RandomBoundedInt CreateShipDateRandom()
     {
-        return RandomBoundedInt(
-            kLineShipDateSeed,
-            kShipDateMin,
-            kShipDateMax,
-            kLineCountMax);
+        return RandomBoundedInt(kLineShipDateSeed, kShipDateMin, kShipDateMax, kLineCountMax);
     }
 
     static std::int64_t MakeOrderKey(std::int64_t order_index)
     {
-        const std::int64_t low_bits =
-            order_index & ((1LL << kOrderKeySparseKeep) - 1);
+        const std::int64_t low_bits = order_index & ((1LL << kOrderKeySparseKeep) - 1);
         std::int64_t ok = order_index;
         ok >>= kOrderKeySparseKeep;
         ok <<= kOrderKeySparseBits;
@@ -336,19 +280,13 @@ private:
         return price;
     }
 
-    static std::int32_t SelectPartSupplier(std::int64_t part_key,
-                                           std::int32_t supplier_number,
-                                           double scale_factor)
+    static std::int32_t SelectPartSupplier(std::int64_t part_key, std::int32_t supplier_number, double scale_factor)
     {
-        const auto supplier_key_max_value =
-            static_cast<std::int64_t>(kSupplierScaleBase * scale_factor);
+        const auto supplier_key_max_value = static_cast<std::int64_t>(kSupplierScaleBase * scale_factor);
         const std::int64_t supplier_number_i = supplier_number;
-        const std::int64_t supplier_key =
-            ((part_key
-              + (supplier_number_i
-                 * ((supplier_key_max_value / kSuppliersPerPart)
-                    + ((part_key - 1) / supplier_key_max_value))))
-             % supplier_key_max_value)
+        const std::int64_t supplier_key
+            = ((part_key + (supplier_number_i * ((supplier_key_max_value / kSuppliersPerPart) + ((part_key - 1) / supplier_key_max_value))))
+               % supplier_key_max_value)
             + 1;
 
         return static_cast<std::int32_t>(supplier_key);
@@ -382,8 +320,7 @@ private:
 
     static constexpr std::int32_t kOrderDateMin = TPCHDate::kMinGenerateDate;
     static constexpr std::int32_t kItemShipDays = kShipDateMax + kReceiptDateMax;
-    static constexpr std::int32_t kOrderDateMax =
-        kOrderDateMin + (TPCHDate::kTotalDateRange - kItemShipDays - 1);
+    static constexpr std::int32_t kOrderDateMax = kOrderDateMin + (TPCHDate::kTotalDateRange - kItemShipDays - 1);
 
     static constexpr std::int64_t kOrderDateSeed = 1'066'728'069;
     static constexpr std::int64_t kLineCountSeed = 1'434'868'289;
@@ -446,24 +383,18 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
 
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
 
         const auto total_orders = ctx.scale.RowCount(kOrders);
-        const auto order_range =
-            MakePartitionRange(total_orders, ctx.partition.part_num, ctx.partition.part_count);
+        const auto order_range = MakePartitionRange(total_orders, ctx.partition.part_num, ctx.partition.part_count);
 
-        row_iter_.Reset(
-            order_range.start_row,
-            order_range.end_row,
-            ctx.scale.factor,
-            text_pool);
+        row_iter_.Reset(order_range.start_row, order_range.end_row, ctx.scale.factor, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -473,7 +404,8 @@ public:
         std::uint64_t batch_count = 0;
 
         LineitemRow row;
-        while (batch_count < max_rows && row_iter_.Next(&row)) {
+        while (batch_count < max_rows && row_iter_.Next(&row))
+        {
             columns_.l_orderkey.Append(row.l_orderkey);
             columns_.l_partkey.Append(row.l_partkey);
             columns_.l_suppkey.Append(row.l_suppkey);
@@ -493,7 +425,8 @@ public:
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kLineitem;
             out->first_row_id = batch_start;
             out->row_count = batch_count;

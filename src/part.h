@@ -28,44 +28,25 @@ struct PartRow
 class PartRowIterator
 {
 public:
-    void Reset(std::uint64_t start_row,
-               std::uint64_t end_row,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_row, std::uint64_t end_row, const TextPool & text_pool)
     {
         next_row_ = start_row;
         end_row_ = end_row;
-        if (next_row_ > end_row_) {
+        if (next_row_ > end_row_)
+        {
             next_row_ = end_row_;
         }
 
-        name_random_ = RandomStringSequence(
-            kNameSeed,
-            kNameWords,
-            kColorsDist);
-        manufacturer_random_ = RandomBoundedInt(
-            kManufacturerSeed,
-            kManufacturerMin,
-            kManufacturerMax);
-        brand_random_ = RandomBoundedInt(
-            kBrandSeed,
-            kBrandMin,
-            kBrandMax);
-        type_random_ = RandomString(
-            kTypeSeed,
-            kPartTypesDist);
-        size_random_ = RandomBoundedInt(
-            kSizeSeed,
-            kSizeMin,
-            kSizeMax);
-        container_random_ = RandomString(
-            kContainerSeed,
-            kPartContainersDist);
-        comment_random_ = RandomText(
-            kCommentSeed,
-            text_pool,
-            static_cast<double>(kCommentAverageLength));
+        name_random_ = RandomStringSequence(kNameSeed, kNameWords, kColorsDist);
+        manufacturer_random_ = RandomBoundedInt(kManufacturerSeed, kManufacturerMin, kManufacturerMax);
+        brand_random_ = RandomBoundedInt(kBrandSeed, kBrandMin, kBrandMax);
+        type_random_ = RandomString(kTypeSeed, kPartTypesDist);
+        size_random_ = RandomBoundedInt(kSizeSeed, kSizeMin, kSizeMax);
+        container_random_ = RandomString(kContainerSeed, kPartContainersDist);
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
 
-        if (next_row_ > 0) {
+        if (next_row_ > 0)
+        {
             const auto rows = static_cast<std::int64_t>(next_row_);
             name_random_.AdvanceRows(rows);
             manufacturer_random_.AdvanceRows(rows);
@@ -79,13 +60,15 @@ public:
 
     bool NextValue(PartRow * out)
     {
-        if (next_row_ >= end_row_) {
+        if (next_row_ >= end_row_)
+        {
             return false;
         }
 
         const std::int32_t part_key = static_cast<std::int32_t>(next_row_ + 1);
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             const StringSequenceInstance name_tokens = name_random_.NextValue();
             name_tokens.ToString(name_buffer_);
 
@@ -202,16 +185,15 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
 
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
 
         row_iter_.Reset(ctx.partition.range.start_row, ctx.partition.range.end_row, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -221,7 +203,8 @@ public:
         std::uint64_t batch_count = 0;
 
         PartRow row;
-        while (batch_count < max_rows && row_iter_.NextValue(&row)) {
+        while (batch_count < max_rows && row_iter_.NextValue(&row))
+        {
             columns_.p_partkey.Append(row.p_partkey);
             columns_.p_name.Append(row.p_name);
             columns_.p_mfgr.Append(row.p_mfgr);
@@ -234,7 +217,8 @@ public:
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kPart;
             out->first_row_id = batch_start;
             out->row_count = batch_count;

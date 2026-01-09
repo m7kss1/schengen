@@ -26,33 +26,24 @@ struct CustomerRow
 class CustomerRowIterator
 {
 public:
-    void Reset(std::uint64_t start_row,
-               std::uint64_t end_row,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_row, std::uint64_t end_row, const TextPool & text_pool)
     {
         next_row_ = start_row;
         end_row_ = end_row;
-        if (next_row_ > end_row_) {
+        if (next_row_ > end_row_)
+        {
             next_row_ = end_row_;
         }
 
         address_random_ = RandomAlphaNumeric(kAddressSeed, kAddressAverageLength);
-        nation_key_random_ = RandomBoundedInt(
-            kNationKeySeed,
-            0,
-            static_cast<std::int32_t>(kNations.size() - 1));
+        nation_key_random_ = RandomBoundedInt(kNationKeySeed, 0, static_cast<std::int32_t>(kNations.size() - 1));
         phone_random_ = RandomPhoneNumber(kPhoneSeed);
-        account_balance_random_ = RandomBoundedInt(
-            kAccountBalanceSeed,
-            kAccountBalanceMin,
-            kAccountBalanceMax);
+        account_balance_random_ = RandomBoundedInt(kAccountBalanceSeed, kAccountBalanceMin, kAccountBalanceMax);
         market_segment_random_ = RandomString(kMarketSegmentSeed, kMarketSegmentsDist);
-        comment_random_ = RandomText(
-            kCommentSeed,
-            text_pool,
-            static_cast<double>(kCommentAverageLength));
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
 
-        if (next_row_ > 0) {
+        if (next_row_ > 0)
+        {
             const auto rows = static_cast<std::int64_t>(next_row_);
             address_random_.AdvanceRows(rows);
             nation_key_random_.AdvanceRows(rows);
@@ -65,13 +56,15 @@ public:
 
     bool Next(CustomerRow * out)
     {
-        if (next_row_ >= end_row_) {
+        if (next_row_ >= end_row_)
+        {
             return false;
         }
 
         const std::int32_t customer_key = static_cast<std::int32_t>(next_row_ + 1);
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             name_buffer_ = FormatCustomerName(customer_key);
 
             const auto address = address_random_.NextValue();
@@ -96,7 +89,9 @@ public:
             out->c_acctbal = static_cast<double>(acctbal_cents) / 100.0;
             out->c_mktsegment = mktsegment;
             out->c_comment = comment;
-        } else {
+        }
+        else
+        {
             (void)address_random_.NextValue();
             const std::int32_t nation_key = nation_key_random_.NextValue();
             (void)phone_random_.NextValue(nation_key);
@@ -170,16 +165,15 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
 
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
 
         row_iter_.Reset(ctx.partition.range.start_row, ctx.partition.range.end_row, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -189,7 +183,8 @@ public:
         std::uint64_t batch_count = 0;
 
         CustomerRow row;
-        while (batch_count < max_rows && row_iter_.Next(&row)) {
+        while (batch_count < max_rows && row_iter_.Next(&row))
+        {
             columns_.c_custkey.Append(row.c_custkey);
             columns_.c_name.Append(row.c_name);
             columns_.c_address.Append(row.c_address);
@@ -201,7 +196,8 @@ public:
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kCustomer;
             out->first_row_id = batch_start;
             out->row_count = batch_count;
@@ -226,4 +222,3 @@ private:
     CustomerColumns columns_;
     CustomerRowIterator row_iter_;
 };
-

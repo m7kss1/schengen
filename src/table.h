@@ -42,7 +42,8 @@ public:
     void Append(ValueType value)
     {
         const auto status = builder_->Append(value);
-        if (!status.ok()) {
+        if (!status.ok())
+        {
             throw std::runtime_error(status.ToString());
         }
     }
@@ -51,7 +52,8 @@ public:
     {
         std::shared_ptr<arrow::Array> array;
         const auto status = builder_->Finish(&array);
-        if (!status.ok()) {
+        if (!status.ok())
+        {
             throw std::runtime_error(status.ToString());
         }
         return array;
@@ -77,7 +79,8 @@ public:
     void Append(std::string_view value)
     {
         const auto status = builder_->Append(value);
-        if (!status.ok()) {
+        if (!status.ok())
+        {
             throw std::runtime_error(status.ToString());
         }
     }
@@ -86,7 +89,8 @@ public:
     {
         std::shared_ptr<arrow::Array> array;
         const auto status = builder_->Finish(&array);
-        if (!status.ok()) {
+        if (!status.ok())
+        {
             throw std::runtime_error(status.ToString());
         }
         return array;
@@ -155,18 +159,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            c_custkey,
-            c_name,
-            c_address,
-            c_nationkey,
-            c_phone,
-            c_acctbal,
-            c_mktsegment,
-            c_comment);
-    }
+    void ClearAll() { ResetAll(c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment); }
 };
 
 class OrdersColumns : public ColumnSetBase
@@ -279,14 +272,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            n_nationkey,
-            n_name,
-            n_regionkey,
-            n_comment);
-    }
+    void ClearAll() { ResetAll(n_nationkey, n_name, n_regionkey, n_comment); }
 };
 
 class RegionColumns : public ColumnSetBase
@@ -303,13 +289,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            r_regionkey,
-            r_name,
-            r_comment);
-    }
+    void ClearAll() { ResetAll(r_regionkey, r_name, r_comment); }
 };
 
 class SupplierColumns : public ColumnSetBase
@@ -334,17 +314,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            s_suppkey,
-            s_name,
-            s_address,
-            s_nationkey,
-            s_phone,
-            s_acctbal,
-            s_comment);
-    }
+    void ClearAll() { ResetAll(s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment); }
 };
 
 class PartSuppColumns : public ColumnSetBase
@@ -365,15 +335,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            ps_partkey,
-            ps_suppkey,
-            ps_availqty,
-            ps_supplycost,
-            ps_comment);
-    }
+    void ClearAll() { ResetAll(ps_partkey, ps_suppkey, ps_availqty, ps_supplycost, ps_comment); }
 };
 
 class PartColumns : public ColumnSetBase
@@ -402,19 +364,7 @@ public:
     {
     }
 
-    void ClearAll()
-    {
-        ResetAll(
-            p_partkey,
-            p_name,
-            p_mfgr,
-            p_brand,
-            p_type,
-            p_size,
-            p_container,
-            p_retailprice,
-            p_comment);
-    }
+    void ClearAll() { ResetAll(p_partkey, p_name, p_mfgr, p_brand, p_type, p_size, p_container, p_retailprice, p_comment); }
 };
 
 inline const TableMetadata kCustomer = {

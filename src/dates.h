@@ -35,19 +35,13 @@ public:
     /* Span of days we are allowed to generate */
     static constexpr std::int32_t kTotalDateRange = 2557;
     /* Julian marker representing today for TPCH */
-    static constexpr std::int32_t kCurrentDate = 95168; 
+    static constexpr std::int32_t kCurrentDate = 95168;
     /* Days between 1992-01-01 and 1970-01-01 */
     static constexpr std::int32_t kUnixEpochOffset = 8035;
 
-    static std::int32_t ToUnixEpoch(std::int32_t generated_date)
-    {
-        return (generated_date - kMinGenerateDate) + kUnixEpochOffset;
-    }
+    static std::int32_t ToUnixEpoch(std::int32_t generated_date) { return (generated_date - kMinGenerateDate) + kUnixEpochOffset; }
 
-    static bool IsInPast(std::int32_t generated_date)
-    {
-        return ToJulian(generated_date) <= kCurrentDate;
-    }
+    static bool IsInPast(std::int32_t generated_date) { return ToJulian(generated_date) <= kCurrentDate; }
 
     static std::string Format(std::int32_t generated_date)
     {
@@ -62,26 +56,21 @@ public:
     }
 
 private:
-    static constexpr std::array<std::int32_t, 13> kMonthYearDayStart = {
-        0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
+    static constexpr std::array<std::int32_t, 13> kMonthYearDayStart = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
 
-    static void ToYmd(std::int32_t generated_date,
-                      std::int32_t & y,
-                      std::int32_t & m,
-                      std::int32_t & d)
+    static void ToYmd(std::int32_t generated_date, std::int32_t & y, std::int32_t & m, std::int32_t & d)
     {
         const std::int32_t julian = ToJulian(generated_date);
         const std::int32_t day = julian % 1000;
         y = julian / 1000;
 
         m = 0;
-        while (day > kMonthYearDayStart[static_cast<std::size_t>(m)] +
-                LeapYearAdjustment(y, m)) {
+        while (day > kMonthYearDayStart[static_cast<std::size_t>(m)] + LeapYearAdjustment(y, m))
+        {
             ++m;
         }
 
-        d = day - kMonthYearDayStart[static_cast<std::size_t>(m - 1)] -
-            (IsLeapYear(y) && m > 2 ? 1 : 0);
+        d = day - kMonthYearDayStart[static_cast<std::size_t>(m - 1)] - (IsLeapYear(y) && m > 2 ? 1 : 0);
     }
 
     static std::int32_t ToJulian(std::int32_t date)
@@ -89,11 +78,13 @@ private:
         std::int32_t offset = date - kMinGenerateDate;
         std::int32_t result = kMinGenerateDate;
 
-        while (true) {
+        while (true)
+        {
             const std::int32_t year = result / 1000;
             const std::int32_t year_end = year * 1000 + 365 + (IsLeapYear(year) ? 1 : 0);
 
-            if (result + offset <= year_end) {
+            if (result + offset <= year_end)
+            {
                 break;
             }
 
@@ -104,10 +95,7 @@ private:
         return result + offset;
     }
 
-    static constexpr bool IsLeapYear(std::int32_t year)
-    {
-        return year % 4 == 0 && year % 100 != 0;
-    }
+    static constexpr bool IsLeapYear(std::int32_t year) { return year % 4 == 0 && year % 100 != 0; }
 
     static constexpr std::int32_t LeapYearAdjustment(std::int32_t year, std::int32_t month)
     {

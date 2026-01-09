@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <string_view>
 
-#include "rands.h"
 #include "generator.h"
+#include "rands.h"
 #include "table.h"
 
 struct RegionRow
@@ -19,30 +19,31 @@ struct RegionRow
 class RegionRowIterator
 {
 public:
-    void Reset(std::uint64_t start_row,
-               std::uint64_t end_row,
-               const TextPool & text_pool)
+    void Reset(std::uint64_t start_row, std::uint64_t end_row, const TextPool & text_pool)
     {
         next_row_ = start_row;
         end_row_ = std::min<std::uint64_t>(end_row, kRegionCount);
-        if (next_row_ > end_row_) {
+        if (next_row_ > end_row_)
+        {
             next_row_ = end_row_;
         }
-        comment_random_ =
-            RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
-        if (next_row_ > 0) {
+        comment_random_ = RandomText(kCommentSeed, text_pool, static_cast<double>(kCommentAverageLength));
+        if (next_row_ > 0)
+        {
             comment_random_.AdvanceRows(static_cast<std::int64_t>(next_row_));
         }
     }
 
     bool Next(RegionRow * out)
     {
-        if (next_row_ >= end_row_) {
+        if (next_row_ >= end_row_)
+        {
             return false;
         }
 
         const std::size_t index = static_cast<std::size_t>(next_row_);
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->r_regionkey = static_cast<std::int32_t>(next_row_);
             out->r_name = kRegionNames[index];
             out->r_comment = comment_random_.NextValue();
@@ -88,15 +89,14 @@ public:
         ctx_ = ctx;
         columns_.ClearAll();
         /* TODO: Get rid of TextPool from GeneratorContext */
-        const TextPool & text_pool = ctx.text_pool != nullptr
-            ? *ctx.text_pool
-            : TextPool::Default();
+        const TextPool & text_pool = ctx.text_pool != nullptr ? *ctx.text_pool : TextPool::Default();
         row_iter_.Reset(ctx.partition.range.start_row, ctx.partition.range.end_row, text_pool);
     }
 
     bool NextBatch(std::uint64_t max_rows, TableBatch * out) override
     {
-        if (max_rows == 0 || row_iter_.Done()) {
+        if (max_rows == 0 || row_iter_.Done())
+        {
             return false;
         }
 
@@ -106,14 +106,16 @@ public:
         std::uint64_t batch_count = 0;
 
         RegionRow row;
-        while (batch_count < max_rows && row_iter_.Next(&row)) {
+        while (batch_count < max_rows && row_iter_.Next(&row))
+        {
             columns_.r_regionkey.Append(row.r_regionkey);
             columns_.r_name.Append(row.r_name);
             columns_.r_comment.Append(row.r_comment);
             ++batch_count;
         }
 
-        if (out != nullptr) {
+        if (out != nullptr)
+        {
             out->metadata = &kRegion;
             out->first_row_id = batch_start;
             out->row_count = batch_count;

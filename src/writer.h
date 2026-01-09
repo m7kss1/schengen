@@ -16,15 +16,14 @@
 #include <string_view>
 
 #if defined(ARROW_PARQUET)
-#include <parquet/arrow/writer.h>
-#include <parquet/properties.h>
+#    include <parquet/arrow/writer.h>
+#    include <parquet/properties.h>
 #endif
 
-enum class OutputFormat 
-    : uint8_t
+enum class OutputFormat : uint8_t
 {
     Parquet,
-    /* TODO: Orc and Lance */  
+    /* TODO: Orc and Lance */
 };
 
 struct OutputLocation
@@ -51,9 +50,9 @@ struct OutputLocation
  * option in this case.
  */
 struct ParquetWriterOptions
-{   
+{
     /* Control parallelism for single row group */
-    bool use_threads = false; 
+    bool use_threads = false;
     std::int64_t max_row_group_rows = 128 * 1024;
     /*
      * TODO: Possible perfomance improvement. Wrap filesystem output stream into
@@ -61,11 +60,11 @@ struct ParquetWriterOptions
      * many small writes emitted by writer. Will gain some perf for 'costy' S3 writes
      */
 #if defined(ARROW_PARQUET)
-#if defined(ARROW_WITH_SNAPPY)
+#    if defined(ARROW_WITH_SNAPPY)
     ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY;
-#else
+#    else
     ::parquet::Compression::type compression = ::parquet::Compression::UNCOMPRESSED;
-#endif
+#    endif
 #else
     int compression = 0;
 #endif
@@ -82,11 +81,13 @@ class ITableWriter
 public:
     virtual ~ITableWriter() = default;
 
-    virtual arrow::Status Open(const TableMetadata & table,
-                               const OutputLocation & output,
-                               std::int32_t part_num,
-                               const WriterOptions & options,
-                               arrow::MemoryPool * pool) = 0;
+    virtual arrow::Status Open(
+        const TableMetadata & table,
+        const OutputLocation & output,
+        std::int32_t part_num,
+        const WriterOptions & options,
+        arrow::MemoryPool * pool)
+        = 0;
 
     virtual arrow::Status BeginRowGroup() = 0;
 
@@ -98,29 +99,28 @@ public:
 class ParquetTableWriter final : public ITableWriter
 {
 public:
-    static arrow::Result<FileSystemPtr> GetFilesystem(std::string_view target_uri)
-    {
-        return ResolveTarget(target_uri);
-    }
+    static arrow::Result<FileSystemPtr> GetFilesystem(std::string_view target_uri) { return ResolveTarget(target_uri); }
 
-    static arrow::Result<std::string> GetPath(std::string_view uri,
-                                              const arrow::fs::FileSystem & fs)
+    static arrow::Result<std::string> GetPath(std::string_view uri, const arrow::fs::FileSystem & fs)
     {
-        if (IsS3Uri(uri) || IsObsUri(uri)) {
+        if (IsS3Uri(uri) || IsObsUri(uri))
+        {
             return arrow::Status::NotImplemented("S3/OBS filesystem is not implemented yet");
         }
 
-        if (HasUriScheme(uri)) {
+        if (HasUriScheme(uri))
+        {
             return fs.PathFromUri(std::string(uri));
         }
         return std::string(uri);
     }
 
-    arrow::Status Open(const TableMetadata & table,
-                       const OutputLocation & output,
-                       std::int32_t part_num,
-                       const WriterOptions & options,
-                       arrow::MemoryPool * pool) override
+    arrow::Status Open(
+        const TableMetadata & table,
+        const OutputLocation & output,
+        std::int32_t part_num,
+        const WriterOptions & options,
+        arrow::MemoryPool * pool) override
     {
 #if !defined(ARROW_PARQUET)
         (void)table;
@@ -130,7 +130,8 @@ public:
         (void)pool;
         return arrow::Status::NotImplemented("Arrow was built without Parquet support");
 #else
-        if (part_num < 1) {
+        if (part_num < 1)
+        {
             return arrow::Status::Invalid("Invalid partition number");
         }
 
@@ -152,32 +153,31 @@ public:
         temp_path_ = final_path_ + ".tmp";
 
         ARROW_ASSIGN_OR_RAISE(const auto info, fs_->GetFileInfo(final_path_));
-        if (info.type() != arrow::fs::FileType::NotFound) {
+        if (info.type() != arrow::fs::FileType::NotFound)
+        {
             return arrow::Status::AlreadyExists(final_path_);
         }
 
         ARROW_ASSIGN_OR_RAISE(sink_, fs_->OpenOutputStream(temp_path_));
 
         auto props_builder = ::parquet::WriterProperties::Builder();
-#if !defined(ARROW_WITH_SNAPPY)
-        if (options_.compression == ::parquet::Compression::SNAPPY) {
+#    if !defined(ARROW_WITH_SNAPPY)
+        if (options_.compression == ::parquet::Compression::SNAPPY)
+        {
             options_.compression = ::parquet::Compression::UNCOMPRESSED;
         }
-#endif
+#    endif
         props_builder.compression(options_.compression);
-        if (options_.max_row_group_rows > 0) {
+        if (options_.max_row_group_rows > 0)
+        {
             props_builder.max_row_group_length(options_.max_row_group_rows);
         }
         auto props = props_builder.build();
 
-        auto arrow_props = ::parquet::ArrowWriterProperties::Builder()
-                               .set_use_threads(options_.use_threads)
-                               ->build();
+        auto arrow_props = ::parquet::ArrowWriterProperties::Builder().set_use_threads(options_.use_threads)->build();
 
         ARROW_ASSIGN_OR_RAISE(
-            writer_,
-            ::parquet::arrow::FileWriter::Open(
-                *table.schema, pool_, sink_, std::move(props), std::move(arrow_props)));
+            writer_, ::parquet::arrow::FileWriter::Open(*table.schema, pool_, sink_, std::move(props), std::move(arrow_props)));
 
         row_group_open_ = false;
         return arrow::Status::OK();
@@ -189,11 +189,13 @@ public:
 #if !defined(ARROW_PARQUET)
         return arrow::Status::NotImplemented("Arrow was built without Parquet support");
 #else
-        if (!writer_) {
+        if (!writer_)
+        {
             return arrow::Status::Invalid("Row group started before file created");
         }
         const auto status = writer_->NewBufferedRowGroup();
-        if (status.ok()) {
+        if (status.ok())
+        {
             row_group_open_ = true;
         }
         return status;
@@ -206,16 +208,20 @@ public:
         (void)batch;
         return arrow::Status::NotImplemented("Arrow was built without Parquet support");
 #else
-        if (!writer_ || table_ == nullptr) {
+        if (!writer_ || table_ == nullptr)
+        {
             return arrow::Status::Invalid("ParquetTableWriter::WriteBatch() called before Open()");
         }
-        if (batch.metadata == nullptr || batch.metadata != table_) {
+        if (batch.metadata == nullptr || batch.metadata != table_)
+        {
             return arrow::Status::Invalid("TableBatch metadata mismatch");
         }
-        if (batch.row_count == 0) {
+        if (batch.row_count == 0)
+        {
             return arrow::Status::OK();
         }
-        if (!row_group_open_) {
+        if (!row_group_open_)
+        {
             RETURN_NOT_OK(BeginRowGroup());
         }
 
@@ -230,15 +236,21 @@ public:
 #if !defined(ARROW_PARQUET)
         return arrow::Status::OK();
 #else
-        if (!writer_) {
+        if (!writer_)
+        {
             return arrow::Status::OK();
         }
         RETURN_NOT_OK(writer_->Close());
         writer_.reset();
-        if (sink_) { RETURN_NOT_OK(sink_->Close()); sink_.reset(); }
+        if (sink_)
+        {
+            RETURN_NOT_OK(sink_->Close());
+            sink_.reset();
+        }
 
         /* Publish the file only after a successful write */
-        if (!temp_path_.empty() && !final_path_.empty()) {
+        if (!temp_path_.empty() && !final_path_.empty())
+        {
             RETURN_NOT_OK(fs_->Move(temp_path_, final_path_));
         }
 
@@ -251,13 +263,16 @@ public:
 private:
     static std::string JoinPath(const std::string & base, const std::string & leaf)
     {
-        if (base.empty()) {
+        if (base.empty())
+        {
             return leaf;
         }
-        if (leaf.empty()) {
+        if (leaf.empty())
+        {
             return base;
         }
-        if (base.back() == '/') {
+        if (base.back() == '/')
+        {
             return base + leaf;
         }
         return base + "/" + leaf;
@@ -280,7 +295,8 @@ private:
 
 inline std::unique_ptr<ITableWriter> MakeTableWriter(OutputFormat format)
 {
-    switch (format) {
+    switch (format)
+    {
         case OutputFormat::Parquet:
             return std::make_unique<ParquetTableWriter>();
         default:
