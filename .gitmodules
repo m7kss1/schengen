@@ -19,3 +19,6 @@
 [submodule "contrib/thrift"]
 	path = contrib/thrift
 	url = https://github.com/apache/thrift
+[submodule "contrib/aws-sdk-cpp"]
+	path = contrib/aws-sdk-cpp
+	url = git@github.com:aws/aws-sdk-cpp.git

@@ -2,8 +2,12 @@ cmake_minimum_required(VERSION 3.25)
 
 project(schengen LANGUAGES C CXX)
 
+# Arrow's AWSSDK finder is invoked before it knows our in-tree AWS SDK targets
+# Use custom FindAWSSDK.cmake path so Arrow can resolve the bundled SDK
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/contrib/aws-sdk-cmake/cmake")
+
 set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
-set(ARROW_S3 OFF CACHE BOOL "" FORCE)
+set(ARROW_S3 ON CACHE BOOL "" FORCE)
 set(ARROW_PARQUET ON CACHE BOOL "" FORCE)
 
 option(ENABLE_LIBRARIES "Enable building bundled third-party libraries" ON)
@@ -38,6 +42,7 @@ if (TARGET sch::arrow AND TARGET sch::yaclib)
   set(_arrow_priv_deps
       arrow_array
       arrow_compute_core
+      arrow_filesystem
       arrow_io
       arrow_memory_pool
       arrow_util

@@ -103,9 +103,9 @@ public:
 
     static arrow::Result<std::string> GetPath(std::string_view uri, const arrow::fs::FileSystem & fs)
     {
-        if (IsS3Uri(uri) || IsObsUri(uri))
+        if (IsObsUri(uri))
         {
-            return arrow::Status::NotImplemented("S3/OBS filesystem is not implemented yet");
+            return arrow::Status::NotImplemented("OBS filesystem is not implemented yet");
         }
 
         if (HasUriScheme(uri))
