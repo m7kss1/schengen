@@ -1,9 +1,21 @@
 [submodule "contrib/arrow"]
 	path = contrib/arrow
 	url = git@github.com:apache/arrow.git
+[submodule "contrib/boost"]
+	path = contrib/boost
+	url = https://github.com/ClickHouse/boost
+[submodule "contrib/rapidjson"]
+	path = contrib/rapidjson
+	url = https://github.com/miloyip/rapidjson
+[submodule "contrib/zlib"]
+	path = contrib/zlib
+	url = https://github.com/madler/zlib
 [submodule "contrib/yaclib"]
 	path = contrib/yaclib
 	url = git@github.com:YACLib/YACLib.git
 [submodule "contrib/googletest"]
 	path = contrib/googletest
 	url = git@github.com:google/googletest.git
+[submodule "contrib/thrift"]
+	path = contrib/thrift
+	url = https://github.com/apache/thrift

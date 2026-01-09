@@ -14,8 +14,15 @@ set(ARROW_BUILD_BENCHMARKS OFF CACHE BOOL "Disable Arrow benchmarks" FORCE)
 set(ARROW_BUILD_EXAMPLES OFF CACHE BOOL "Disable Arrow examples" FORCE)
 set(ARROW_BUILD_INTEGRATION OFF CACHE BOOL "Disable Arrow integration builds" FORCE)
 set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "Disable Arrow CLI utilities" FORCE)
+set(ARROW_INSTALL OFF CACHE BOOL "Disable Arrow install/export targets" FORCE)
+set(ARROW_FILESYSTEM ON CACHE BOOL "" FORCE)
+set(ARROW_IPC ON CACHE BOOL "" FORCE)
+set(ARROW_COMPUTE ON CACHE BOOL "" FORCE)
 set(ARROW_SIMD_LEVEL "NONE" CACHE STRING "Disable Arrow SIMD to ease portability" FORCE)
 set(ARROW_RUNTIME_SIMD_LEVEL "NONE" CACHE STRING "Disable runtime SIMD dispatch" FORCE)
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install rules for embedded Arrow" FORCE)
+
+find_package(ZLIB REQUIRED)
 
 set(ARROW_INCLUDE_DIRS
     "${ARROW_SOURCE_DIR}/src"
@@ -29,4 +36,8 @@ add_subdirectory(
 
 if (TARGET arrow_static)
   add_library(sch::arrow ALIAS arrow_static)
+endif ()
+
+if (TARGET parquet_static)
+  add_library(sch::parquet ALIAS parquet_static)
 endif ()

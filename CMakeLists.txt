@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(schengen LANGUAGES CXX)
+project(schengen LANGUAGES C CXX)
 
 set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
+set(ARROW_S3 OFF CACHE BOOL "" FORCE)
+set(ARROW_PARQUET ON CACHE BOOL "" FORCE)
 
 option(ENABLE_LIBRARIES "Enable building bundled third-party libraries" ON)
 
