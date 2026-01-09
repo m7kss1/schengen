@@ -61,9 +61,9 @@ struct ParquetWriterOptions
      */
 #if defined(ARROW_PARQUET)
 #    if defined(ARROW_WITH_SNAPPY)
-    ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY;
+    ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY; /* TODO: FIXME */
 #    else
-    ::parquet::Compression::type compression = ::parquet::Compression::UNCOMPRESSED;
+    ::parquet::Compression::type compression = ::parquet::Compression::GZIP;
 #    endif
 #else
     int compression = 0;
