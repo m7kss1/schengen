@@ -6,7 +6,7 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "generator.h"
+#include "Common/generator.h"
 
 class TableRegistry
 {

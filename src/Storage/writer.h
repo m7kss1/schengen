@@ -1,8 +1,8 @@
 #pragma once
 
-#include "storage.h"
+#include "Storage/storage.h"
 
-#include "table.h"
+#include "Tables/table.h"
 
 #include <arrow/api.h>
 #include <arrow/io/interfaces.h>

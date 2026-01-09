@@ -1,14 +1,14 @@
 #pragma once
 
-#include "customer.h"
-#include "lineitem.h"
-#include "nation.h"
-#include "orders.h"
-#include "part.h"
-#include "partsupp.h"
-#include "region.h"
-#include "supplier.h"
-#include "table_registry.h"
+#include "Tables/customer.h"
+#include "Tables/lineitem.h"
+#include "Tables/nation.h"
+#include "Tables/orders.h"
+#include "Tables/part.h"
+#include "Tables/partsupp.h"
+#include "Tables/region.h"
+#include "Tables/supplier.h"
+#include "Common/registry.h"
 
 inline void RegisterTableCustomer(TableRegistry & registry)
 {

@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "table.h"
+#include "Tables/table.h"
 
 struct ScaleConfig
 {

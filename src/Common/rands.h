@@ -1,6 +1,6 @@
 #pragma once
 
-#include "distribution.h"
+#include "Common/distribution.h"
 
 #include <cstdint>
 #include <cstdio>

@@ -3,11 +3,11 @@
 #include <cstdint>
 #include <string_view>
 
-#include "dates.h"
-#include "distribution.h"
-#include "generator.h"
-#include "rands.h"
-#include "table.h"
+#include "Common/dates.h"
+#include "Common/distribution.h"
+#include "Common/generator.h"
+#include "Common/rands.h"
+#include "Tables/table.h"
 
 /* Agenda (mirrors tpchgen-rs)
  * l_orderkey: MakeOrderKey(order_index) with the same sparse bits as orders.

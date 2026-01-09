@@ -3,9 +3,9 @@
 #include <cstdint>
 #include <string_view>
 
-#include "generator.h"
-#include "rands.h"
-#include "table.h"
+#include "Common/generator.h"
+#include "Common/rands.h"
+#include "Tables/table.h"
 
 struct PartSuppRow
 {

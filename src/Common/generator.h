@@ -1,6 +1,6 @@
 #pragma once
 
-#include "partition.h"
+#include "Common/partition.h"
 
 #include <cstdint>
 #include <arrow/api.h>
