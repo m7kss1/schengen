@@ -24,6 +24,13 @@ set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install rules for embedded Arro
 
 find_package(ZLIB REQUIRED)
 
+# Arrow's ThirdpartyToolchain expects Thrift_VERSION to be non-empty when
+# ARROW_WITH_THRIFT is enabled. Provide a default to avoid CMake errors when
+# using our vendored Thrift target.
+if (ARROW_PARQUET AND (NOT DEFINED Thrift_VERSION OR Thrift_VERSION STREQUAL ""))
+  set(Thrift_VERSION "0.22.0")
+endif ()
+
 set(ARROW_INCLUDE_DIRS
     "${ARROW_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/arrow-build/src"
