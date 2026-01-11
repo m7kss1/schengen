@@ -40,25 +40,18 @@ static void PrintTableList()
     }
 }
 
-static std::int32_t ResolveParquetPartCount(
-    const TableMetadata & table,
-    const ScaleConfig & scale,
-    const WriterOptions & options)
+static std::int32_t ResolveParquetPartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options)
 {
-    const auto row_group_rows =
-        ParquetTableWriter::ResolveRowGroupRows(table, options.parquet);
+    const auto row_group_rows = ParquetTableWriter::ResolveRowGroupRows(table, options.parquet);
     if (row_group_rows <= 0)
     {
         return 1;
     }
 
     const auto total_rows = scale.RowCount(table);
-    const auto row_group_rows_u =
-        static_cast<std::uint64_t>(row_group_rows);
-    const auto parts_u =
-        (total_rows + row_group_rows_u - 1) / row_group_rows_u;
-    const auto max_parts =
-        static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max());
+    const auto row_group_rows_u = static_cast<std::uint64_t>(row_group_rows);
+    const auto parts_u = (total_rows + row_group_rows_u - 1) / row_group_rows_u;
+    const auto max_parts = static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max());
     return static_cast<std::int32_t>(std::min(parts_u, max_parts));
 }
 
@@ -77,11 +70,7 @@ struct PartResult
     std::string error;
 };
 
-static PartResult GeneratePartition(
-    const GenerationContext & ctx,
-    const TableMetadata & table,
-    std::int32_t part,
-    std::int32_t part_count)
+static PartResult GeneratePartition(const GenerationContext & ctx, const TableMetadata & table, std::int32_t part, std::int32_t part_count)
 {
     PartResult result;
     try
@@ -100,12 +89,10 @@ static PartResult GeneratePartition(
         gen_ctx.pool = ctx.pool;
         generator->Reset(gen_ctx);
 
-        const auto part_rows =
-            gen_ctx.partition.range.end_row - gen_ctx.partition.range.start_row;
+        const auto part_rows = gen_ctx.partition.range.end_row - gen_ctx.partition.range.start_row;
         if (part_rows > 0)
         {
-            const auto expected_batches =
-                (part_rows + ctx.batch_rows - 1) / ctx.batch_rows;
+            const auto expected_batches = (part_rows + ctx.batch_rows - 1) / ctx.batch_rows;
             result.batches.reserve(static_cast<std::size_t>(expected_batches));
         }
 
@@ -127,15 +114,9 @@ static PartResult GeneratePartition(
 }
 
 static yaclib::FutureOn<PartResult> LaunchPartitionTask(
-    yaclib::IExecutor & executor,
-    const GenerationContext & ctx,
-    const TableMetadata & table,
-    std::int32_t part,
-    std::int32_t part_count)
+    yaclib::IExecutor & executor, const GenerationContext & ctx, const TableMetadata & table, std::int32_t part, std::int32_t part_count)
 {
-    return yaclib::Run(
-        executor,
-        [&ctx, &table, part, part_count]() { return GeneratePartition(ctx, table, part, part_count); });
+    return yaclib::Run(executor, [&ctx, &table, part, part_count]() { return GeneratePartition(ctx, table, part, part_count); });
 }
 
 static int GenerateTable(
@@ -145,15 +126,13 @@ static int GenerateTable(
     const WriterOptions & writer_options,
     yaclib::IExecutor & part_executor)
 {
-    const auto part_count =
-        ResolveParquetPartCount(table, *ctx.scale, writer_options);
+    const auto part_count = ResolveParquetPartCount(table, *ctx.scale, writer_options);
 
     std::vector<yaclib::FutureOn<PartResult>> part_futures;
     part_futures.reserve(static_cast<std::size_t>(part_count));
     for (std::int32_t part = 1; part <= part_count; ++part)
     {
-        part_futures.emplace_back(
-            LaunchPartitionTask(part_executor, ctx, table, part, part_count));
+        part_futures.emplace_back(LaunchPartitionTask(part_executor, ctx, table, part, part_count));
     }
 
     auto writer = MakeTableWriter(writer_options.format);
@@ -231,9 +210,8 @@ static yaclib::FutureOn<int> LaunchTableTask(
 {
     return yaclib::Run(
         table_executor,
-        [&ctx, &table, &output, &writer_options, &part_executor]() {
-            return GenerateTable(ctx, table, output, writer_options, part_executor);
-        });
+        [&ctx, &table, &output, &writer_options, &part_executor]()
+        { return GenerateTable(ctx, table, output, writer_options, part_executor); });
 }
 
 int main(int argc, char ** argv)
@@ -245,15 +223,12 @@ int main(int argc, char ** argv)
     std::uint64_t batch_rows = 128 * 1024;
 
     po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "Help message")
-        ("list-tables", "List available tables")
-        ("scale-factor", po::value<double>(&scale_factor)->default_value(1.0), "Set scale factor")
-        ("output-format", po::value<std::string>(&output_format)->default_value("parquet"), "Set tables output format")
-        ("output-path", po::value<std::string>(&output_path)->default_value("."), "Set output directory path")
-        ("table", po::value<std::vector<std::string>>(&tables)->multitoken(), "Specify tables to generate")
-        ("batch-rows", po::value<std::uint64_t>(&batch_rows)->default_value(128 * 1024), "Control rows per batch count")
-    ;
+    desc.add_options()("help", "Help message")("list-tables", "List available tables")(
+        "scale-factor", po::value<double>(&scale_factor)->default_value(1.0), "Set scale factor")(
+        "output-format", po::value<std::string>(&output_format)->default_value("parquet"), "Set tables output format")(
+        "output-path", po::value<std::string>(&output_path)->default_value("."), "Set output directory path")(
+        "table", po::value<std::vector<std::string>>(&tables)->multitoken(), "Specify tables to generate")(
+        "batch-rows", po::value<std::uint64_t>(&batch_rows)->default_value(128 * 1024), "Control rows per batch count");
 
     po::variables_map vm;
     try
@@ -343,14 +318,7 @@ int main(int argc, char ** argv)
             return 2;
         }
 
-        table_futures.emplace_back(
-            LaunchTableTask(
-                *table_executor,
-                ctx,
-                *metadata,
-                output,
-                writer_options,
-                *part_executor));
+        table_futures.emplace_back(LaunchTableTask(*table_executor, ctx, *metadata, output, writer_options, *part_executor));
     }
 
     int exit_code = 0;
