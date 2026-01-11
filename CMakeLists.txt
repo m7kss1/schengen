@@ -5,6 +5,8 @@ project(schengen LANGUAGES C CXX)
 # Arrow's AWSSDK finder is invoked before it knows our in-tree AWS SDK targets
 # Use custom FindAWSSDK.cmake path so Arrow can resolve the bundled SDK
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/contrib/aws-sdk-cmake/cmake")
+# Arrow's Snappy finder relies on CMAKE_MODULE_PATH as well.
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/contrib/snappy-cmake/cmake")
 # Local cmake helpers (e.g. FindSnappy)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 

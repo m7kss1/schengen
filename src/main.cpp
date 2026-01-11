@@ -112,9 +112,7 @@ static PartResult GeneratePartition(
         TableBatch batch;
         while (generator->NextBatch(ctx.batch_rows, &batch))
         {
-            /* Move batch buffers to keep zero-copy semantics. */
             result.batches.emplace_back(std::move(batch));
-            batch = {};
         }
     }
     catch (const std::exception & ex)
