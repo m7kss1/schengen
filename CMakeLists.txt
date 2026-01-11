@@ -5,6 +5,8 @@ project(schengen LANGUAGES C CXX)
 # Arrow's AWSSDK finder is invoked before it knows our in-tree AWS SDK targets
 # Use custom FindAWSSDK.cmake path so Arrow can resolve the bundled SDK
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/contrib/aws-sdk-cmake/cmake")
+# Local cmake helpers (e.g. FindSnappy)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
 set(ARROW_S3 ON CACHE BOOL "" FORCE)
@@ -15,6 +17,8 @@ option(ENABLE_LIBRARIES "Enable building bundled third-party libraries" ON)
 if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Release, Debug, ...)" FORCE)
 endif ()
+
+find_package(Boost COMPONENTS program_options REQUIRED)
 
 add_subdirectory(contrib)
 
@@ -58,7 +62,9 @@ if (TARGET sch::arrow AND TARGET sch::yaclib)
     schengen_main
     PRIVATE
       ${_existing_arrow_priv_deps}
+      Boost::program_options
       sch::arrow
+      sch::parquet
       sch::yaclib
   )
 else ()

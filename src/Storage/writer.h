@@ -10,6 +10,7 @@
 #include <arrow/status.h>
 #include <arrow/util/config.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -39,11 +40,7 @@ struct OutputLocation
 };
 
 /* 
- * By default, we already write one file per partition in parallel
- * No need to use internal parquet writer threads since it may cause deadlock [1]
- * Keep it off by default or enable explicitly if needed
- * 
- * [1]: Arrow comments for WriteRecordBatch:
+ * Arrow comments for WriteRecordBatch:
  * If you are writing multiple files in parallel in the same
  * executor, deadlock may occur if ArrowWriterProperties::use_threads
  * is set to true to write columns in parallel. Please disable use_threads
@@ -53,7 +50,10 @@ struct ParquetWriterOptions
 {
     /* Control parallelism for single row group */
     bool use_threads = false;
-    std::int64_t max_row_group_rows = 128 * 1024;
+    /* Target row group size in bytes. Used to estimate rows per group */
+    std::int64_t row_group_bytes = 7 * 1024 * 1024;
+    /* Override row group length in rows (0 = auto from row_group_bytes) */
+    std::int64_t max_row_group_rows = 0;
     /*
      * TODO: Possible perfomance improvement. Wrap filesystem output stream into
      * large buffered stream (e.g. 32MB) to reduces overhead of 
@@ -61,9 +61,9 @@ struct ParquetWriterOptions
      */
 #if defined(ARROW_PARQUET)
 #    if defined(ARROW_WITH_SNAPPY)
-    ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY; /* TODO: FIXME */
+    ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY;
 #    else
-    ::parquet::Compression::type compression = ::parquet::Compression::GZIP;
+    ::parquet::Compression::type compression = ::parquet::Compression::UNCOMPRESSED;
 #    endif
 #else
     int compression = 0;
@@ -100,6 +100,61 @@ class ParquetTableWriter final : public ITableWriter
 {
 public:
     static arrow::Result<FileSystemPtr> GetFilesystem(std::string_view target_uri) { return ResolveTarget(target_uri); }
+
+    static std::int64_t EstimateParquetRowBytes(std::string_view table_name)
+    {
+        if (table_name == "nation")
+        {
+            return 117;
+        }
+        if (table_name == "region")
+        {
+            return 151;
+        }
+        if (table_name == "part")
+        {
+            return 70;
+        }
+        if (table_name == "supplier")
+        {
+            return 164;
+        }
+        if (table_name == "partsupp")
+        {
+            return 141 * 4;
+        }
+        if (table_name == "customer")
+        {
+            return 168;
+        }
+        if (table_name == "orders")
+        {
+            return 75;
+        }
+        if (table_name == "lineitem")
+        {
+            return 64;
+        }
+        return 0;
+    }
+
+    static std::int64_t ResolveRowGroupRows(const TableMetadata & table, const ParquetWriterOptions & options)
+    {
+        if (options.max_row_group_rows > 0)
+        {
+            return options.max_row_group_rows;
+        }
+        if (options.row_group_bytes <= 0)
+        {
+            return 0;
+        }
+        const auto avg_row_bytes = EstimateParquetRowBytes(table.name);
+        if (avg_row_bytes <= 0)
+        {
+            return 0;
+        }
+        return std::max<std::int64_t>(1, options.row_group_bytes / avg_row_bytes);
+    }
 
     static arrow::Result<std::string> GetPath(std::string_view uri, const arrow::fs::FileSystem & fs)
     {
@@ -161,16 +216,11 @@ public:
         ARROW_ASSIGN_OR_RAISE(sink_, fs_->OpenOutputStream(temp_path_));
 
         auto props_builder = ::parquet::WriterProperties::Builder();
-#    if !defined(ARROW_WITH_SNAPPY)
-        if (options_.compression == ::parquet::Compression::SNAPPY)
-        {
-            options_.compression = ::parquet::Compression::UNCOMPRESSED;
-        }
-#    endif
         props_builder.compression(options_.compression);
-        if (options_.max_row_group_rows > 0)
+        const auto row_group_rows = ResolveRowGroupRows(*table_, options_);
+        if (row_group_rows > 0)
         {
-            props_builder.max_row_group_length(options_.max_row_group_rows);
+            props_builder.max_row_group_length(row_group_rows);
         }
         auto props = props_builder.build();
 

@@ -22,3 +22,6 @@
 [submodule "contrib/aws-sdk-cpp"]
 	path = contrib/aws-sdk-cpp
 	url = git@github.com:aws/aws-sdk-cpp.git
+[submodule "contrib/snappy"]
+	path = contrib/snappy
+	url = git@github.com:google/snappy.git
