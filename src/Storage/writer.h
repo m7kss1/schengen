@@ -5,6 +5,7 @@
 #include "Tables/table.h"
 
 #include <arrow/api.h>
+#include <arrow/io/buffered.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
@@ -24,7 +25,7 @@
 enum class OutputFormat : uint8_t
 {
     Parquet,
-    /* TODO: Orc and Lance */
+    /* TODO: Orc, Lance, Iceberg, Paimon */
 };
 
 struct OutputLocation
@@ -33,7 +34,7 @@ struct OutputLocation
      * Output directory URI/path
      * Examples:
      *  - "file:///tmp/schengen"
-     *  - "s3://bucket/prefix" (TODO)
+     *  - "s3://bucket/prefix"
      *  - "obs://bucket/prefix" (TODO)
      */
     std::string uri;
@@ -54,11 +55,8 @@ struct ParquetWriterOptions
     std::int64_t row_group_bytes = 7 * 1024 * 1024;
     /* Override row group length in rows (0 = auto from row_group_bytes) */
     std::int64_t max_row_group_rows = 0;
-    /*
-     * TODO: Possible perfomance improvement. Wrap filesystem output stream into
-     * large buffered stream (e.g. 32MB) to reduces overhead of 
-     * many small writes emitted by writer. Will gain some perf for 'costy' S3 writes
-     */
+    /* Wrap filesystem output stream into a buffered stream to reduce small write overhead (set <= 0 to disable) */
+    std::int64_t output_buffer_bytes = 21 * 1024 * 1024;
 #if defined(ARROW_PARQUET)
 #    if defined(ARROW_WITH_SNAPPY)
     ::parquet::Compression::type compression = ::parquet::Compression::SNAPPY;
@@ -214,6 +212,12 @@ public:
         }
 
         ARROW_ASSIGN_OR_RAISE(sink_, fs_->OpenOutputStream(temp_path_));
+        if (options_.output_buffer_bytes > 0)
+        {
+            ARROW_ASSIGN_OR_RAISE(
+                sink_,
+                arrow::io::BufferedOutputStream::Create(options_.output_buffer_bytes, pool_, std::move(sink_)));
+        }
 
         auto props_builder = ::parquet::WriterProperties::Builder();
         props_builder.compression(options_.compression);
