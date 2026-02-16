@@ -25,3 +25,6 @@
 [submodule "contrib/snappy"]
 	path = contrib/snappy
 	url = git@github.com:google/snappy.git
+[submodule "contrib/benchmark"]
+	path = contrib/benchmark
+	url = git@github.com:google/benchmark.git

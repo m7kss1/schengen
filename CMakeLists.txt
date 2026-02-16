@@ -115,3 +115,7 @@ endif ()
 if (TARGET sch::gtest_main)
   add_subdirectory(test)
 endif ()
+
+if (TARGET schengen_core)
+  add_subdirectory(bench)
+endif ()
