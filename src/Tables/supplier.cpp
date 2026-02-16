@@ -60,6 +60,10 @@ bool SupplierRowIterator::Next(SupplierRow * out)
 
         const std::int32_t acctbal_cents = account_balance_random_.NextValue();
 
+        /* 
+         * NOTE: Here returns view on TextPool data
+         * The comment is copied into buffer for optional BBB mutations
+         */
         {
             const std::string_view comment_view = comment_random_.NextValue();
             comment_buffer_.assign(comment_view.data(), comment_view.size());

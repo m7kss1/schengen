@@ -46,9 +46,13 @@ struct OutputLocation
  */
 struct ParquetWriterOptions
 {
+    /* Control parallelism for single row group */
     bool use_threads = false;
+    /* Target row group size in bytes. Used to estimate rows per group */
     std::int64_t row_group_bytes = 7 * 1024 * 1024;
+    /* Override row group length in rows (0 = auto from row_group_bytes) */
     std::int64_t max_row_group_rows = 0;
+    /* Wrap filesystem output stream into a buffered stream to reduce small write overhead (set <= 0 to disable) */
     std::int64_t output_buffer_bytes = 21 * 1024 * 1024;
 #if defined(ARROW_PARQUET)
 #    if defined(ARROW_WITH_SNAPPY)

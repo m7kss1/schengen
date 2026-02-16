@@ -42,7 +42,7 @@ private:
     static constexpr const char * kBbbBaseText = "Customer ";
     static constexpr const char * kBbbComplaintText = "Complaints";
     static constexpr const char * kBbbRecommendText = "Recommends";
-    static constexpr std::int32_t kBbbCommentLength = 9 + 10;
+    static constexpr std::int32_t kBbbCommentLength = 9 /* strlen("Customer ") */ + 10 /* strlen("Complaints") */;
     static constexpr std::int32_t kBbbCommentsPerScaleBase = 10;
     static constexpr std::int32_t kBbbComplaintPercent = 50;
 

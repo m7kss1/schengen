@@ -50,6 +50,22 @@ bool PartSuppRowIterator::Next(PartSuppRow * out)
         out->ps_comment = comment;
     }
 
+    /* 
+     * We emit 4 suppliers for every part. Generator row ends only after the 4th supplier 
+     *
+     * ┌──────────────────────────────────────────────────────────────────────────────────────────┐
+     * │ ps_partkey │ ps_suppkey │ ps_availqty │ ps_supplycost │           ps_comment             │
+     * │   int64    │   int64    │    int64    │    decimal    │             varchar              │ 
+     * ├────────────┼────────────┼─────────────┼───────────────┼──────────────────────────────────┤
+     * │          1 │          2 │        3325 │        771.64 │ blithely regular theodolites ... │
+     * │          1 │       2502 │        8076 │        993.49 │ ts boost carefully ironic ...    │
+     * │          1 │       5002 │        3956 │        337.09 │  fluffily regular multipliers ...  │
+     * │          1 │       7502 │        4069 │        357.84 │ press deposits. special ...      │
+     * │          2 │          3 │        8895 │        378.49 │ sits. furiously regular ...      │
+     * │          2 │       2503 │        4969 │        915.27 │ deposits doze. slyly ...         │
+     * ├────────────┴────────────┴─────────────┴───────────────┴──────────────────────────────────┤
+     */
+
     ++part_supplier_number_;
     if (part_supplier_number_ >= kSuppliersPerPart)
     {
@@ -74,6 +90,10 @@ std::uint64_t PartSuppRowIterator::NextRowId() const
     return next_part_ * static_cast<std::uint64_t>(kSuppliersPerPart) + static_cast<std::uint64_t>(part_supplier_number_);
 }
 
+/*
+ * Deterministic mapping from {part_key, supplier_number} -> supplier key
+ * supplier_number is always {0..3} (4 distinct suppliers per part)
+ */
 std::int32_t PartSuppRowIterator::SelectPartSupplier(std::int32_t part_key, std::int32_t supplier_number, double scale_factor)
 {
     const auto supplier_key_max_value = static_cast<std::int64_t>(kSupplierScaleBase * scale_factor);
