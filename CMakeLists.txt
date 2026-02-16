@@ -28,9 +28,34 @@ if (TARGET sch::gtest_main)
   enable_testing()
 endif ()
 
-add_subdirectory(test)
-
 if (TARGET sch::arrow AND TARGET sch::yaclib)
+  set(SCHENGEN_CORE_SOURCES
+      src/Common/dates.cpp
+      src/Common/partition.cpp
+      src/Common/registry.cpp
+      src/Storage/storage.cpp
+      src/Storage/writer.cpp
+      src/Tables/customer.cpp
+      src/Tables/lineitem.cpp
+      src/Tables/nation.cpp
+      src/Tables/orders.cpp
+      src/Tables/part.cpp
+      src/Tables/partsupp.cpp
+      src/Tables/region.cpp
+      src/Tables/register_tables.cpp
+      src/Tables/supplier.cpp
+      src/Tables/table.cpp)
+
+  add_library(schengen_core STATIC ${SCHENGEN_CORE_SOURCES})
+  target_compile_features(schengen_core PRIVATE cxx_std_17)
+  target_include_directories(schengen_core PRIVATE ${PROJECT_SOURCE_DIR}/src)
+  if (DEFINED ARROW_INCLUDE_DIRS)
+    target_include_directories(schengen_core PRIVATE ${ARROW_INCLUDE_DIRS})
+  endif ()
+  if (DEFINED YACLIB_INCLUDE_DIRS)
+    target_include_directories(schengen_core PRIVATE ${YACLIB_INCLUDE_DIRS})
+  endif ()
+
   add_executable(schengen_main src/main.cpp)
   target_compile_features(schengen_main PRIVATE cxx_std_17)
 
@@ -61,8 +86,17 @@ if (TARGET sch::arrow AND TARGET sch::yaclib)
   endforeach()
 
   target_link_libraries(
+    schengen_core
+    PRIVATE
+      ${_existing_arrow_priv_deps}
+      sch::arrow
+      sch::parquet
+  )
+
+  target_link_libraries(
     schengen_main
     PRIVATE
+      schengen_core
       ${_existing_arrow_priv_deps}
       Boost::program_options
       sch::arrow
@@ -76,4 +110,8 @@ else ()
   if (NOT TARGET sch::yaclib)
     message(STATUS "YACLib is disabled")
   endif ()
+endif ()
+
+if (TARGET sch::gtest_main)
+  add_subdirectory(test)
 endif ()
