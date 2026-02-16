@@ -1,5 +1,5 @@
 if (NOT TARGET benchmark::benchmark_main)
-  message(FATAL_ERROR "Google Benchmark target 'benchmark::benchmark_main' is unavailable")
+  message(FATAL_ERROR "Google Benchmark target is unavailable")
 endif ()
 
 add_executable(table_iter_bench EXCLUDE_FROM_ALL tables.cpp)
