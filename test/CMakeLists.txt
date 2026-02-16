@@ -9,6 +9,9 @@ target_include_directories(
   table_generator_tests
   PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
+    "${PROJECT_SOURCE_DIR}/src/Common"
+    "${PROJECT_SOURCE_DIR}/src/Tables"
+    "${PROJECT_SOURCE_DIR}/src/Storage"
 )
 if (DEFINED ARROW_INCLUDE_DIRS)
   target_include_directories(table_generator_tests PRIVATE ${ARROW_INCLUDE_DIRS})
@@ -17,6 +20,9 @@ if (DEFINED YACLIB_INCLUDE_DIRS)
   target_include_directories(table_generator_tests PRIVATE ${YACLIB_INCLUDE_DIRS})
 endif ()
 target_link_libraries(table_generator_tests PRIVATE sch::gtest_main)
+if (TARGET schengen_core)
+  target_link_libraries(table_generator_tests PRIVATE schengen_core)
+endif ()
 if (TARGET sch::arrow)
   set(_arrow_priv_deps
       arrow_array

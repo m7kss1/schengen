@@ -13,37 +13,13 @@ class TableRegistry
 public:
     using GeneratorFactory = std::function<std::unique_ptr<ITableGenerator>(arrow::MemoryPool *)>;
 
-    static TableRegistry & Instance()
-    {
-        static TableRegistry instance;
-        return instance;
-    }
+    static TableRegistry & Instance();
 
-    void RegisterTable(const TableMetadata & metadata, GeneratorFactory factory)
-    {
-        const std::string key = metadata.name;
-        tables_.emplace(key, Entry{&metadata, std::move(factory)});
-    }
+    void RegisterTable(const TableMetadata & metadata, GeneratorFactory factory);
 
-    const TableMetadata * FindMetadata(std::string_view name) const
-    {
-        const auto it = tables_.find(std::string(name));
-        if (it == tables_.end())
-        {
-            return nullptr;
-        }
-        return it->second.metadata;
-    }
+    const TableMetadata * FindMetadata(std::string_view name) const;
 
-    std::unique_ptr<ITableGenerator> CreateGenerator(std::string_view name, arrow::MemoryPool * pool) const
-    {
-        const auto it = tables_.find(std::string(name));
-        if (it == tables_.end())
-        {
-            return nullptr;
-        }
-        return it->second.factory(pool);
-    }
+    std::unique_ptr<ITableGenerator> CreateGenerator(std::string_view name, arrow::MemoryPool * pool) const;
 
 private:
     struct Entry
