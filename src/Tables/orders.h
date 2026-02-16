@@ -17,6 +17,11 @@ struct OrderRow
     std::string_view o_orderstatus;
     std::int32_t o_totalprice_cents = 0;
     double o_totalprice = 0.0;
+    /* 
+     * Order date stored and encoded 
+     * as TPCH-like date (YYDDD)
+     * For more: Check out TPCHDate comments
+     */
     std::int32_t o_orderdate = 1;
     std::int32_t o_orderdate_epoch = 0;
     std::string_view o_orderpriority;
