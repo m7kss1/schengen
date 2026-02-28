@@ -62,6 +62,10 @@ jobs:
           name: build-verify-parquet-sf1
           path: ${{ github.workspace }}/build-verify-parquet-sf1
 
+      - name: Restore execute permissions
+        run: |
+          chmod +x "$GITHUB_WORKSPACE/build-verify-parquet-sf1/test/table_generator_tests"
+
       - name: Verify parquet sf1 tables
         run: |
           chmod +x .docker/verify-parquet-sf1.sh

@@ -17,6 +17,10 @@ if [[ ! -f "${BUILD_DIR}/test/table_generator_tests" ]]; then
   exit 2
 fi
 
+if [[ ! -x "${BUILD_DIR}/test/table_generator_tests" ]]; then
+  chmod +x "${BUILD_DIR}/test/table_generator_tests"
+fi
+
 ctest --test-dir "${BUILD_DIR}" \
       -R "${TEST_REGEX}" \
       --output-on-failure
