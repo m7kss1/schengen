@@ -12,9 +12,10 @@ permissions:
   packages: read
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
+  build-and-verify:
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
+
     container:
       image: ghcr.io/m7kss1/base:latest
 
@@ -24,7 +25,24 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Configure
+        run: |
+          cmake -S . \
+                -B build \
+                -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DUSE_SYSTEM_ARROW=ON \
+                -DENABLE_FORMATS=OFF \
+                -DENABLE_PARQUET=ON \
+                -DENABLE_GOOGLETEST=OFF \
+                -DENABLE_BENCHMARK=OFF
+
+      - name: Build
+        run: |
+          cmake --build build --target schengen_core -j"$(nproc)"
+          test -f build/libschengen_core.so
+
       - name: Verify parquet sf1 tables
         run: |
           chmod +x .docker/verify-parquet-sf1.sh
-          ./.docker/verify-parquet-sf1.sh "$GITHUB_WORKSPACE"
+          ./.docker/verify-parquet-sf1.sh "$PWD"
