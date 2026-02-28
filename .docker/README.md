@@ -27,16 +27,18 @@ docker build -f .docker/Dockerfile.verify-parquet-sf1 \
   -t verify-parquet-sf1 .
 ```
 
-## Run verifier
+## Build tests (SF1)
 
 ```bash
-docker run --rm -v "$PWD:/workspace" verify-parquet-sf1
+docker run --rm -v "$PWD:/workspace" base \
+  bash -lc 'chmod +x .docker/build-parquet-sf1.sh && ./.docker/build-parquet-sf1.sh /workspace'
 ```
 
-If your source is mounted elsewhere:
+## Run verifier (without build)
 
 ```bash
-docker run --rm -v "$PWD:/src" verify-parquet-sf1 /src
+docker run --rm -v "$PWD:/workspace" base \
+  bash -lc 'chmod +x .docker/verify-parquet-sf1.sh && ./.docker/verify-parquet-sf1.sh /workspace'
 ```
 
 The verifier executes these existing gtests by default:
