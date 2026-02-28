@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -38,21 +37,6 @@ static void PrintTableList()
     {
         std::cout << name << "\n";
     }
-}
-
-static std::int32_t ResolveParquetPartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options)
-{
-    const auto row_group_rows = ParquetTableWriter::ResolveRowGroupRows(table, options.parquet);
-    if (row_group_rows <= 0)
-    {
-        return 1;
-    }
-
-    const auto total_rows = scale.RowCount(table);
-    const auto row_group_rows_u = static_cast<std::uint64_t>(row_group_rows);
-    const auto parts_u = (total_rows + row_group_rows_u - 1) / row_group_rows_u;
-    const auto max_parts = static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max());
-    return static_cast<std::int32_t>(std::min(parts_u, max_parts));
 }
 
 struct GenerationContext
@@ -126,7 +110,7 @@ static int GenerateTable(
     const WriterOptions & writer_options,
     yaclib::IExecutor & part_executor)
 {
-    const auto part_count = ResolveParquetPartCount(table, *ctx.scale, writer_options);
+    const auto part_count = ResolveWriterPartCount(table, *ctx.scale, writer_options);
 
     std::vector<yaclib::FutureOn<PartResult>> part_futures;
     part_futures.reserve(static_cast<std::size_t>(part_count));
@@ -142,7 +126,7 @@ static int GenerateTable(
         return 2;
     }
 
-    const auto open_status = writer->Open(table, output, /*part_num=*/1, writer_options, ctx.pool);
+    const auto open_status = writer->Open(table, output, writer_options, ctx.pool);
     if (!open_status.ok())
     {
         std::cerr << "Writer open failed: " << open_status.ToString() << "\n";
@@ -172,10 +156,10 @@ static int GenerateTable(
             continue;
         }
 
-        const auto begin_status = writer->BeginRowGroup();
+        const auto begin_status = writer->BeginPartition(part, part_count);
         if (!begin_status.ok())
         {
-            std::cerr << "Failed to begin row group: " << begin_status.ToString() << "\n";
+            std::cerr << "Failed to begin partition: " << begin_status.ToString() << "\n";
             return 2;
         }
 
@@ -187,6 +171,13 @@ static int GenerateTable(
                 std::cerr << "Failed to write data: " << write_status.ToString() << "\n";
                 return 2;
             }
+        }
+
+        const auto end_status = writer->EndPartition();
+        if (!end_status.ok())
+        {
+            std::cerr << "Failed to end partition: " << end_status.ToString() << "\n";
+            return 2;
         }
     }
 
@@ -276,9 +267,18 @@ int main(int argc, char ** argv)
         tables = DefaultTableNames();
     }
 
-    /* TODO: FIXME */
     OutputFormat format = OutputFormat::Parquet;
-    if (output_format != "parquet")
+    if (output_format == "parquet")
+    {
+        format = OutputFormat::Parquet;
+    }
+#if defined(ENABLE_VORTEX)
+    else if (output_format == "vortex")
+    {
+        format = OutputFormat::Vortex;
+    }
+#endif
+    else
     {
         std::cerr << "Unsupported output format: " << output_format << "\n";
         return 2;

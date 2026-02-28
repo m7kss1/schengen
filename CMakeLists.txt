@@ -17,7 +17,7 @@ option(ENABLE_PARQUET "Enable Parquet format support" ON)
 option(ENABLE_ORC "Enable ORC format support (not implemented yet)" OFF)
 option(ENABLE_LANCE "Enable Lance format support (not implemented yet)" OFF)
 option(ENABLE_ICEBERG "Enable Iceberg format support (not implemented yet)" OFF)
-option(ENABLE_VORTEX "Enable Vortex format support (not implemented yet)" OFF)
+option(ENABLE_VORTEX "Enable Vortex format support" OFF)
 
 if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Release, Debug, ...)" FORCE)
@@ -29,12 +29,15 @@ if (NOT ENABLE_FORMATS)
   set(ENABLE_ORC OFF CACHE BOOL "Enable ORC format support (not implemented yet)" FORCE)
   set(ENABLE_LANCE OFF CACHE BOOL "Enable Lance format support (not implemented yet)" FORCE)
   set(ENABLE_ICEBERG OFF CACHE BOOL "Enable Iceberg format support (not implemented yet)" FORCE)
-  set(ENABLE_VORTEX OFF CACHE BOOL "Enable Vortex format support (not implemented yet)" FORCE)
+  set(ENABLE_VORTEX OFF CACHE BOOL "Enable Vortex format support" FORCE)
 endif ()
 
 set(SCHENGEN_ENABLED_FORMATS)
 if (ENABLE_PARQUET)
   list(APPEND SCHENGEN_ENABLED_FORMATS parquet)
+endif ()
+if (ENABLE_VORTEX)
+  list(APPEND SCHENGEN_ENABLED_FORMATS vortex)
 endif ()
 if (ENABLE_ORC)
   message(STATUS "ENABLE_ORC=ON, but ORC support is not implemented yet; skipping")
@@ -45,13 +48,12 @@ endif ()
 if (ENABLE_ICEBERG)
   message(STATUS "ENABLE_ICEBERG=ON, but Iceberg support is not implemented yet; skipping")
 endif ()
-if (ENABLE_VORTEX)
-  message(STATUS "ENABLE_VORTEX=ON, but Vortex support is not implemented yet; skipping")
-endif ()
-
 set(SCHENGEN_BUILD_FORMAT_TARGETS OFF)
 if (ENABLE_FORMATS AND SCHENGEN_ENABLED_FORMATS)
   set(SCHENGEN_BUILD_FORMAT_TARGETS ON)
+endif ()
+if (ENABLE_FORMATS AND "vortex" IN_LIST SCHENGEN_ENABLED_FORMATS)
+  message(STATUS "Vortex is enabled (minimal dependency integration).")
 endif ()
 
 if (SCHENGEN_ENABLED_FORMATS)
@@ -89,6 +91,7 @@ if (USE_SYSTEM_ARROW)
 endif ()
 
 set(ARROW_USE_EXCEPTION ON CACHE BOOL "" FORCE)
+set(ARROW_FILESYSTEM ON CACHE BOOL "" FORCE)
 set(ARROW_PARQUET OFF CACHE BOOL "" FORCE)
 if ("parquet" IN_LIST SCHENGEN_ENABLED_FORMATS)
   set(ARROW_PARQUET ON CACHE BOOL "" FORCE)
@@ -154,7 +157,11 @@ if (TARGET sch::arrow)
 
     set(SCHENGEN_STORAGE_SOURCES
         src/Storage/storage.cpp
+        src/Storage/parquet_writer.cpp
         src/Storage/writer.cpp)
+    if (TARGET sch::vortex)
+      list(APPEND SCHENGEN_STORAGE_SOURCES src/Storage/vortex_writer.cpp)
+    endif ()
 
     add_library(schengen_storage STATIC ${SCHENGEN_STORAGE_SOURCES})
     target_compile_features(schengen_storage PRIVATE cxx_std_17)
@@ -183,11 +190,17 @@ if (TARGET sch::arrow)
       PRIVATE
         schengen_core
         sch::arrow
-        sch::parquet
         ${_existing_storage_arrow_priv_deps}
     )
+    if ("parquet" IN_LIST SCHENGEN_ENABLED_FORMATS AND TARGET sch::parquet)
+      target_link_libraries(schengen_storage PRIVATE sch::parquet)
+    endif ()
+    if (TARGET sch::vortex)
+      target_compile_definitions(schengen_storage PRIVATE ENABLE_VORTEX=1)
+      target_link_libraries(schengen_storage PRIVATE sch::vortex)
+    endif ()
 
-    if (TARGET sch::yaclib)
+    if (TARGET sch::yaclib AND SCHENGEN_BUILD_FORMAT_TARGETS)
       find_package(Boost COMPONENTS program_options REQUIRED)
 
       add_executable(schengen_main src/main.cpp)
@@ -208,9 +221,14 @@ if (TARGET sch::arrow)
           ${_existing_storage_arrow_priv_deps}
           Boost::program_options
           sch::arrow
-          sch::parquet
           sch::yaclib
       )
+      if (TARGET sch::parquet)
+        target_link_libraries(schengen_main PRIVATE sch::parquet)
+      endif ()
+      if (TARGET sch::vortex)
+        target_compile_definitions(schengen_main PRIVATE ENABLE_VORTEX=1)
+      endif ()
     else ()
       message(STATUS "YACLib is disabled; Skipping CLI target")
     endif ()
