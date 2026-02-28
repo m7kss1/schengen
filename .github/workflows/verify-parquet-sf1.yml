@@ -17,9 +17,6 @@ jobs:
     timeout-minutes: 30
     container:
       image: ghcr.io/m7kss1/base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
