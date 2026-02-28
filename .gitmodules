@@ -28,3 +28,9 @@
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
 	url = git@github.com:google/benchmark.git
+[submodule "contrib/vortex"]
+	path = contrib/vortex
+	url = git@github.com:vortex-data/vortex.git
+[submodule "contrib/corrosion"]
+	path = contrib/corrosion
+	url = git@github.com:corrosion-rs/corrosion.git

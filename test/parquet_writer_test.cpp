@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "region.h"
+#include "parquet_writer.h"
 #include "writer.h"
 
 #include <arrow/util/config.h>
@@ -29,7 +30,10 @@ TEST(ParquetWriterTest, WritesAndReadsBack)
     const OutputLocation output{.uri = out_dir.string()};
 
     WriterOptions options;
-    options.parquet.max_row_group_rows = 1024;
+    auto parquet_options = std::make_shared<ParquetWriterOptions>();
+    parquet_options->max_row_group_rows = 1024;
+    options.format = OutputFormat::Parquet;
+    options.format_options = parquet_options;
 
     auto writer = MakeTableWriter(OutputFormat::Parquet);
     ASSERT_NE(writer, nullptr);
@@ -48,14 +52,15 @@ TEST(ParquetWriterTest, WritesAndReadsBack)
     RegionGenerator gen(pool);
     gen.Reset(ctx);
 
-    ASSERT_TRUE(writer->Open(kRegion, output, /*part_num=*/1, options, pool).ok());
-    const auto begin_status = writer->BeginRowGroup();
+    ASSERT_TRUE(writer->Open(kRegion, output, options, pool).ok());
+    const auto begin_status = writer->BeginPartition(/*part_num=*/1, /*part_count=*/1);
     ASSERT_TRUE(begin_status.ok()) << begin_status.ToString();
 
     TableBatch batch;
     while (gen.NextBatch(/*max_rows=*/1024, &batch)) {
         ASSERT_TRUE(writer->WriteBatch(batch).ok());
     }
+    ASSERT_TRUE(writer->EndPartition().ok());
 
     ASSERT_TRUE(writer->Close().ok());
 

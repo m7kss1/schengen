@@ -81,7 +81,7 @@ if (ENABLE_PARQUET)
 endif ()
 
 set(ARROW_PARQUET ${_schengen_enable_parquet} CACHE BOOL "Enable Parquet support in Arrow" FORCE)
-set(ARROW_FILESYSTEM ${_schengen_enable_parquet} CACHE BOOL "Enable Arrow filesystem layer" FORCE)
+set(ARROW_FILESYSTEM ON CACHE BOOL "Enable Arrow filesystem layer" FORCE)
 set(ARROW_IPC ON CACHE BOOL "Enable Arrow IPC support" FORCE)
 set(_schengen_enable_s3 OFF)
 if (_schengen_enable_parquet AND ENABLE_AWS_SDK)
