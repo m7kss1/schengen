@@ -12,12 +12,14 @@ permissions:
   packages: read
 
 jobs:
-  build-and-verify:
+  build:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-
     container:
       image: ghcr.io/m7kss1/base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
@@ -25,24 +27,42 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Configure
+      - name: Build parquet sf1 tests
         run: |
-          cmake -S . \
-                -B build \
-                -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_SYSTEM_ARROW=ON \
-                -DENABLE_FORMATS=OFF \
-                -DENABLE_PARQUET=ON \
-                -DENABLE_GOOGLETEST=OFF \
-                -DENABLE_BENCHMARK=OFF
+          chmod +x .docker/build-parquet-sf1.sh
+          ./.docker/build-parquet-sf1.sh "$GITHUB_WORKSPACE"
 
-      - name: Build
-        run: |
-          cmake --build build --target schengen_core -j"$(nproc)"
-          test -f build/libschengen_core.so
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-verify-parquet-sf1
+          path: ${{ github.workspace }}/build-verify-parquet-sf1
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/m7kss1/base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-verify-parquet-sf1
+          path: ${{ github.workspace }}/build-verify-parquet-sf1
 
       - name: Verify parquet sf1 tables
         run: |
           chmod +x .docker/verify-parquet-sf1.sh
-          ./.docker/verify-parquet-sf1.sh "$PWD"
+          ./.docker/verify-parquet-sf1.sh "$GITHUB_WORKSPACE"
