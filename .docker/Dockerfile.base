@@ -1,0 +1,71 @@
+# syntax=docker/dockerfile:1
+
+FROM ubuntu:22.04
+
+LABEL org.opencontainers.image.description="schengen base image with prebuilt Arrow/Parquet"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV INSTALL_PREFIX=/opt/dependencies
+ENV SCHENGEN_EXPECTED_DIR=/opt/schengen-fixtures
+
+SHELL ["/bin/bash", "-lc"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git \
+    ninja-build \
+    pkg-config \
+    python3 \
+    python3-pip \
+    libboost-all-dev \
+    libbrotli-dev \
+    liblz4-dev \
+    libre2-dev \
+    libsnappy-dev \
+    libthrift-dev \
+    libzstd-dev \
+    rapidjson-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ubuntu 22.04 CMake is too old for modern Arrow.
+RUN pip3 install --no-cache-dir "cmake>=3.25"
+
+WORKDIR /tmp/build
+COPY contrib/arrow contrib/arrow
+
+RUN mkdir -p contrib/arrow/cpp/build && \
+    cd contrib/arrow/cpp/build && \
+    cmake -G Ninja .. \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+      -DARROW_BUILD_SHARED=ON \
+      -DARROW_BUILD_STATIC=OFF \
+      -DARROW_BUILD_TESTS=OFF \
+      -DARROW_BUILD_BENCHMARKS=OFF \
+      -DARROW_BUILD_EXAMPLES=OFF \
+      -DARROW_BUILD_UTILITIES=OFF \
+      -DARROW_PARQUET=ON \
+      -DARROW_COMPUTE=ON \
+      -DARROW_FILESYSTEM=ON \
+      -DARROW_CSV=ON \
+      -DARROW_S3=OFF \
+      -DARROW_WITH_SNAPPY=ON \
+      -DARROW_WITH_ZSTD=ON \
+      -DARROW_WITH_LZ4=ON \
+      -DARROW_WITH_ZLIB=ON \
+      -DARROW_WITH_BROTLI=ON \
+      -DARROW_WITH_RE2=ON && \
+    ninja -j"$(nproc)" && \
+    ninja install && \
+    rm -rf /tmp/build
+
+ENV CMAKE_PREFIX_PATH=${INSTALL_PREFIX}
+ENV PKG_CONFIG_PATH=${INSTALL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}
+ENV LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
+
+WORKDIR /workspace
+COPY test/expected ${SCHENGEN_EXPECTED_DIR}
+CMD ["bash"]

@@ -1,0 +1,33 @@
+name: verify-parquet-sf1
+
+on:
+  push:
+    branches:
+      - trunk
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/m7kss1/base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify parquet sf1 tables
+        run: |
+          chmod +x .docker/verify-parquet-sf1.sh
+          ./.docker/verify-parquet-sf1.sh "$GITHUB_WORKSPACE"

@@ -11,6 +11,7 @@
 #include "supplier.h"
 
 #include <array>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -22,6 +23,12 @@ static const TextPool & text_pool = TextPool::Default();
 static std::string ExpectedPath(const char * filename)
 {
     namespace fs = std::filesystem;
+    if (const char * expected_dir = std::getenv("SCHENGEN_EXPECTED_DIR")) {
+        const fs::path candidate = fs::path(expected_dir) / filename;
+        if (fs::exists(candidate)) {
+            return candidate.string();
+        }
+    }
     const fs::path dir = fs::path(__FILE__).parent_path();
     return (dir / "expected" / filename).string();
 }

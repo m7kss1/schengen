@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+
+ARG BASE_IMAGE=base
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.description="schengen verifier image for parquet sf1 region gtest"
+
+COPY .docker/verify-parquet-sf1.sh /usr/local/bin/verify-parquet-sf1
+RUN chmod +x /usr/local/bin/verify-parquet-sf1
+
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/verify-parquet-sf1"]
