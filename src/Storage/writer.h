@@ -24,8 +24,9 @@ struct ScaleConfig;
 enum class OutputFormat : uint8_t
 {
     Parquet,
+    Orc,
     Vortex,
-    /* TODO: Orc, Lance, Iceberg, Paimon */
+    /* TODO: Lance, Iceberg, Paimon */
 };
 
 struct OutputLocation

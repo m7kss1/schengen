@@ -1,5 +1,6 @@
 #include "Storage/write_scheduler.h"
 
+#include "Storage/orc_writer.h"
 #include "Storage/parquet_writer.h"
 
 #include <boost/program_options.hpp>
@@ -396,7 +397,6 @@ int RunParallelPartitionFiles(
     return first_error.load(std::memory_order_acquire);
 }
 
-#if defined(ARROW_PARQUET)
 std::string JoinPath(const std::string & base, const std::string & leaf)
 {
     if (base.empty())
@@ -414,7 +414,18 @@ std::string JoinPath(const std::string & base, const std::string & leaf)
     return base + "/" + leaf;
 }
 
-class ParquetSingleFileSink
+class ISingleFileSink
+{
+public:
+    virtual ~ISingleFileSink() = default;
+    virtual arrow::Status BeginPartition() = 0;
+    virtual arrow::Status WriteBatch(const TableBatch & batch) = 0;
+    virtual arrow::Status EndPartition() = 0;
+    virtual arrow::Status Close() = 0;
+};
+
+#if defined(ARROW_PARQUET)
+class ParquetSingleFileSink final : public ISingleFileSink
 {
 public:
     arrow::Status Open(
@@ -468,7 +479,7 @@ public:
         return arrow::Status::OK();
     }
 
-    arrow::Status BeginPartition()
+    arrow::Status BeginPartition() override
     {
         if (!is_open_ || !writer_)
         {
@@ -483,7 +494,7 @@ public:
         return arrow::Status::OK();
     }
 
-    arrow::Status WriteBatch(const TableBatch & batch)
+    arrow::Status WriteBatch(const TableBatch & batch) override
     {
         if (!is_open_ || !writer_ || table_ == nullptr)
         {
@@ -507,13 +518,13 @@ public:
         return writer_->WriteRecordBatch(*rb);
     }
 
-    arrow::Status EndPartition()
+    arrow::Status EndPartition() override
     {
         partition_open_ = false;
         return arrow::Status::OK();
     }
 
-    arrow::Status Close()
+    arrow::Status Close() override
     {
         if (!is_open_)
         {
@@ -558,6 +569,182 @@ private:
 };
 #endif
 
+#if defined(ARROW_ORC)
+class OrcSingleFileSink final : public ISingleFileSink
+{
+public:
+    arrow::Status Open(
+        const TableMetadata & table,
+        const OutputLocation & output,
+        const OrcWriterOptions & options,
+        arrow::MemoryPool * pool)
+    {
+        table_ = &table;
+        pool_ = pool != nullptr ? pool : arrow::default_memory_pool();
+        options_ = options;
+
+        ARROW_ASSIGN_OR_RAISE(fs_, OrcTableWriter::GetFilesystem(output.uri));
+        ARROW_ASSIGN_OR_RAISE(const std::string base_dir, OrcTableWriter::GetPath(output.uri, *fs_));
+
+        const auto table_dir = JoinPath(base_dir, table.name);
+        RETURN_NOT_OK(fs_->CreateDir(table_dir, /*recursive=*/true));
+
+        final_path_ = JoinPath(table_dir, table.name + "-1.orc");
+        temp_path_ = final_path_ + ".tmp";
+
+        ARROW_ASSIGN_OR_RAISE(const auto info, fs_->GetFileInfo(final_path_));
+        if (info.type() != arrow::fs::FileType::NotFound)
+        {
+            return arrow::Status::AlreadyExists(final_path_);
+        }
+
+        ARROW_ASSIGN_OR_RAISE(sink_, fs_->OpenOutputStream(temp_path_));
+        if (options_.output_buffer_bytes > 0)
+        {
+            ARROW_ASSIGN_OR_RAISE(
+                sink_,
+                arrow::io::BufferedOutputStream::Create(options_.output_buffer_bytes, pool_, std::move(sink_)));
+        }
+
+        arrow::adapters::orc::WriteOptions write_options;
+        const auto stripe_bytes = OrcTableWriter::ResolveStripeBytes(*table_, options_);
+        if (stripe_bytes > 0)
+        {
+            write_options.stripe_size = stripe_bytes;
+        }
+        write_options.compression = options_.compression;
+
+        ARROW_ASSIGN_OR_RAISE(writer_, arrow::adapters::orc::ORCFileWriter::Open(sink_.get(), write_options));
+
+        is_open_ = true;
+        return arrow::Status::OK();
+    }
+
+    arrow::Status BeginPartition() override
+    {
+        if (!is_open_ || !writer_)
+        {
+            return arrow::Status::Invalid("OrcSingleFileSink::BeginPartition() called before Open()");
+        }
+        /* 
+         * Note: Arrow adapter has no explicit "start stripe" API
+         * keep partition state for scheduler ordering 
+         */
+        partition_open_ = true;
+        return arrow::Status::OK();
+    }
+
+    arrow::Status WriteBatch(const TableBatch & batch) override
+    {
+        if (!is_open_ || !writer_ || table_ == nullptr)
+        {
+            return arrow::Status::Invalid("OrcSingleFileSink::WriteBatch() called before Open()");
+        }
+        if (batch.metadata == nullptr || batch.metadata != table_)
+        {
+            return arrow::Status::Invalid("TableBatch metadata mismatch");
+        }
+        if (batch.row_count == 0)
+        {
+            return arrow::Status::OK();
+        }
+        if (!partition_open_)
+        {
+            RETURN_NOT_OK(BeginPartition());
+        }
+
+        const auto row_count = static_cast<std::int64_t>(batch.row_count);
+        auto rb = arrow::RecordBatch::Make(table_->schema, row_count, batch.columns);
+        return writer_->Write(*rb);
+    }
+
+    arrow::Status EndPartition() override
+    {
+        partition_open_ = false;
+        return arrow::Status::OK();
+    }
+
+    arrow::Status Close() override
+    {
+        if (!is_open_)
+        {
+            return arrow::Status::OK();
+        }
+
+        RETURN_NOT_OK(writer_->Close());
+        writer_.reset();
+
+        if (sink_)
+        {
+            RETURN_NOT_OK(sink_->Close());
+            sink_.reset();
+        }
+
+        if (!temp_path_.empty() && !final_path_.empty())
+        {
+            RETURN_NOT_OK(fs_->Move(temp_path_, final_path_));
+        }
+
+        fs_.reset();
+        table_ = nullptr;
+        pool_ = nullptr;
+        temp_path_.clear();
+        final_path_.clear();
+        is_open_ = false;
+        partition_open_ = false;
+        return arrow::Status::OK();
+    }
+
+private:
+    const TableMetadata * table_ = nullptr;
+    arrow::MemoryPool * pool_ = nullptr;
+    OrcWriterOptions options_{};
+    FileSystemPtr fs_;
+    std::string temp_path_;
+    std::string final_path_;
+    std::shared_ptr<arrow::io::OutputStream> sink_;
+    std::unique_ptr<arrow::adapters::orc::ORCFileWriter> writer_;
+    bool is_open_ = false;
+    bool partition_open_ = false;
+};
+#endif
+
+arrow::Result<std::unique_ptr<ISingleFileSink>> OpenSingleFileSink(
+    const TableMetadata & table,
+    const OutputLocation & output,
+    const WriterOptions & writer_options,
+    arrow::MemoryPool * pool)
+{
+    switch (writer_options.format)
+    {
+        case OutputFormat::Parquet:
+#if defined(ARROW_PARQUET)
+        {
+            const auto & parquet_options = ParquetTableWriter::ResolveOptions(writer_options);
+            auto sink = std::make_unique<ParquetSingleFileSink>();
+            RETURN_NOT_OK(sink->Open(table, output, parquet_options, pool));
+            return sink;
+        }
+#else
+            return arrow::Status::NotImplemented("single-file-ordered requires ARROW_PARQUET for parquet format");
+#endif
+        case OutputFormat::Orc:
+#if defined(ARROW_ORC)
+        {
+            const auto & orc_options = OrcTableWriter::ResolveOptions(writer_options);
+            auto sink = std::make_unique<OrcSingleFileSink>();
+            RETURN_NOT_OK(sink->Open(table, output, orc_options, pool));
+            return sink;
+        }
+#else
+            return arrow::Status::NotImplemented("single-file-ordered requires ARROW_ORC for orc format");
+#endif
+        default:
+            return arrow::Status::NotImplemented(
+                "single-file-ordered strategy is currently supported for parquet and orc formats");
+    }
+}
+
 enum class BatchMessageKind : std::uint8_t
 {
     Batch,
@@ -583,26 +770,14 @@ int RunSingleFileOrdered(
     const WriteSchedulerOptions & scheduler_options,
     yaclib::IExecutor & part_executor)
 {
-    (void)format_driver;
-
-    if (writer_options.format != OutputFormat::Parquet)
+    auto sink_result = OpenSingleFileSink(table, output, writer_options, ctx.pool);
+    if (!sink_result.ok())
     {
-        std::cerr << "single-file-ordered strategy is currently supported only for parquet\n";
+        std::cerr << "Failed to open single output file for table " << table.name << " (format " << format_driver.Name()
+                  << "): " << sink_result.status().ToString() << "\n";
         return 2;
     }
-
-#if !defined(ARROW_PARQUET)
-    std::cerr << "single-file-ordered strategy requires ARROW_PARQUET\n";
-    return 2;
-#else
-    const auto & parquet_options = ParquetTableWriter::ResolveOptions(writer_options);
-    ParquetSingleFileSink sink;
-    const auto open_status = sink.Open(table, output, parquet_options, ctx.pool);
-    if (!open_status.ok())
-    {
-        std::cerr << "Failed to open single parquet file for table " << table.name << ": " << open_status.ToString() << "\n";
-        return 2;
-    }
+    auto sink = std::move(sink_result).ValueOrDie();
 
     detail::BoundedMpscQueue<BatchMessage> queue(scheduler_options.queue_capacity);
     yaclib_std::atomic<bool> stop_requested{false};
@@ -719,13 +894,13 @@ int RunSingleFileOrdered(
             {
                 if (!state.opened)
                 {
-                    RETURN_NOT_OK(sink.BeginPartition());
+                    RETURN_NOT_OK(sink->BeginPartition());
                     state.opened = true;
                 }
 
                 while (!state.batches.empty())
                 {
-                    RETURN_NOT_OK(sink.WriteBatch(state.batches.front()));
+                    RETURN_NOT_OK(sink->WriteBatch(state.batches.front()));
                     state.batches.pop_front();
                 }
             }
@@ -737,7 +912,7 @@ int RunSingleFileOrdered(
 
             if (state.opened)
             {
-                RETURN_NOT_OK(sink.EndPartition());
+                RETURN_NOT_OK(sink->EndPartition());
             }
 
             states.erase(state_it);
@@ -810,7 +985,7 @@ int RunSingleFileOrdered(
         pipeline_error = "Not all partitions were written to the output file";
     }
 
-    const auto close_status = sink.Close();
+    const auto close_status = sink->Close();
     if (!close_status.ok() && pipeline_error.empty())
     {
         pipeline_error = close_status.ToString();
@@ -822,7 +997,6 @@ int RunSingleFileOrdered(
         return 2;
     }
     return 0;
-#endif
 }
 } // namespace
 

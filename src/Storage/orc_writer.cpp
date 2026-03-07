@@ -1,47 +1,89 @@
-#include "Storage/parquet_writer.h"
+#include "Storage/orc_writer.h"
 #include "Storage/row_size_estimates.h"
 
 #include <algorithm>
 #include <arrow/io/buffered.h>
+#include <limits>
 
-arrow::Result<FileSystemPtr> ParquetTableWriter::GetFilesystem(std::string_view target_uri)
+arrow::Result<FileSystemPtr> OrcTableWriter::GetFilesystem(std::string_view target_uri)
 {
     return ResolveTarget(target_uri);
 }
 
-std::int64_t ParquetTableWriter::EstimateParquetRowBytes(std::string_view table_name)
+std::int64_t OrcTableWriter::EstimateOrcRowBytes(std::string_view table_name)
 {
     return EstimateTpchRowBytes(table_name);
 }
 
-std::int64_t ParquetTableWriter::ResolveRowGroupRows(const TableMetadata & table, const ParquetWriterOptions & options)
+std::int64_t OrcTableWriter::ResolveStripeRows(const TableMetadata & table, const OrcWriterOptions & options)
 {
-    if (options.max_row_group_rows > 0)
+    if (options.max_stripe_rows > 0)
     {
-        return options.max_row_group_rows;
+        return options.max_stripe_rows;
     }
-    if (options.row_group_bytes <= 0)
+    if (options.stripe_bytes <= 0)
     {
         return 0;
     }
-    const auto avg_row_bytes = EstimateParquetRowBytes(table.name);
+
+    const auto avg_row_bytes = EstimateOrcRowBytes(table.name);
     if (avg_row_bytes <= 0)
     {
         return 0;
     }
-    return std::max<std::int64_t>(1, options.row_group_bytes / avg_row_bytes);
+    return std::max<std::int64_t>(1, options.stripe_bytes / avg_row_bytes);
 }
 
-const ParquetWriterOptions & ParquetTableWriter::ResolveOptions(const WriterOptions & options)
+std::int64_t OrcTableWriter::ResolveStripeBytes(const TableMetadata & table, const OrcWriterOptions & options)
 {
-    static const ParquetWriterOptions defaults{};
+    const auto avg_row_bytes = EstimateOrcRowBytes(table.name);
+
+    if (options.max_stripe_rows > 0)
+    {
+        if (avg_row_bytes > 0)
+        {
+            const auto max_rows = options.max_stripe_rows;
+            if (max_rows > std::numeric_limits<std::int64_t>::max() / avg_row_bytes)
+            {
+                return std::numeric_limits<std::int64_t>::max();
+            }
+            return std::max<std::int64_t>(1, max_rows * avg_row_bytes);
+        }
+        if (options.stripe_bytes > 0)
+        {
+            return options.stripe_bytes;
+        }
+        return 0;
+    }
+
+    if (options.stripe_bytes > 0)
+    {
+        return options.stripe_bytes;
+    }
+
+    const auto rows = ResolveStripeRows(table, options);
+    if (rows <= 0)
+    {
+        return 0;
+    }
+
+    if (avg_row_bytes <= 0)
+    {
+        return 0;
+    }
+    return std::max<std::int64_t>(1, rows * avg_row_bytes);
+}
+
+const OrcWriterOptions & OrcTableWriter::ResolveOptions(const WriterOptions & options)
+{
+    static const OrcWriterOptions defaults{};
 
     if (!options.format_options)
     {
         return defaults;
     }
 
-    auto typed_options = std::dynamic_pointer_cast<const ParquetWriterOptions>(options.format_options);
+    auto typed_options = std::dynamic_pointer_cast<const OrcWriterOptions>(options.format_options);
     if (!typed_options)
     {
         return defaults;
@@ -49,7 +91,16 @@ const ParquetWriterOptions & ParquetTableWriter::ResolveOptions(const WriterOpti
     return *typed_options;
 }
 
-arrow::Result<std::string> ParquetTableWriter::GetPath(std::string_view uri, const arrow::fs::FileSystem & fs)
+std::string OrcTableWriter::BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition)
+{
+    if (partition.part_count <= 1)
+    {
+        return table_name + "-1.orc";
+    }
+    return table_name + "-part-" + std::to_string(partition.part_num) + "-of-" + std::to_string(partition.part_count) + ".orc";
+}
+
+arrow::Result<std::string> OrcTableWriter::GetPath(std::string_view uri, const arrow::fs::FileSystem & fs)
 {
     if (IsObsUri(uri))
     {
@@ -63,33 +114,24 @@ arrow::Result<std::string> ParquetTableWriter::GetPath(std::string_view uri, con
     return std::string(uri);
 }
 
-std::string ParquetTableWriter::BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition)
-{
-    if (partition.part_count <= 1)
-    {
-        return table_name + "-1.parquet";
-    }
-    return table_name + "-part-" + std::to_string(partition.part_num) + "-of-" + std::to_string(partition.part_count) + ".parquet";
-}
-
-arrow::Status ParquetTableWriter::OpenPartition(
+arrow::Status OrcTableWriter::OpenPartition(
     const TableMetadata & table,
     const OutputLocation & output,
     const WriterOptions & options,
     const PartitionSpec & partition,
     arrow::MemoryPool * pool)
 {
-#if !defined(ARROW_PARQUET)
+#if !defined(ARROW_ORC)
     (void)table;
     (void)output;
     (void)options;
     (void)partition;
     (void)pool;
-    return arrow::Status::NotImplemented("Arrow was built without Parquet support");
+    return arrow::Status::NotImplemented("Arrow was built without ORC support");
 #else
     if (is_open_)
     {
-        return arrow::Status::Invalid("ParquetTableWriter::OpenPartition() called while partition is already open");
+        return arrow::Status::Invalid("OrcTableWriter::OpenPartition() called while partition is already open");
     }
     if (partition.part_num < 1 || partition.part_count < 1 || partition.part_num > partition.part_count)
     {
@@ -123,35 +165,29 @@ arrow::Status ParquetTableWriter::OpenPartition(
             arrow::io::BufferedOutputStream::Create(options_.output_buffer_bytes, pool_, std::move(sink_)));
     }
 
-    auto props_builder = ::parquet::WriterProperties::Builder();
-    props_builder.compression(options_.compression);
-    const auto row_group_rows = ResolveRowGroupRows(*table_, options_);
-    if (row_group_rows > 0)
+    arrow::adapters::orc::WriteOptions write_options;
+    const auto stripe_bytes = ResolveStripeBytes(*table_, options_);
+    if (stripe_bytes > 0)
     {
-        props_builder.max_row_group_length(row_group_rows);
+        write_options.stripe_size = stripe_bytes;
     }
-    auto props = props_builder.build();
+    write_options.compression = options_.compression;
 
-    auto arrow_props = ::parquet::ArrowWriterProperties::Builder().set_use_threads(options_.use_threads)->build();
-
-    ARROW_ASSIGN_OR_RAISE(
-        writer_, ::parquet::arrow::FileWriter::Open(*table.schema, pool_, sink_, std::move(props), std::move(arrow_props)));
-
-    RETURN_NOT_OK(writer_->NewBufferedRowGroup());
+    ARROW_ASSIGN_OR_RAISE(writer_, arrow::adapters::orc::ORCFileWriter::Open(sink_.get(), write_options));
     is_open_ = true;
     return arrow::Status::OK();
 #endif
 }
 
-arrow::Status ParquetTableWriter::WriteBatch(const TableBatch & batch)
+arrow::Status OrcTableWriter::WriteBatch(const TableBatch & batch)
 {
-#if !defined(ARROW_PARQUET)
+#if !defined(ARROW_ORC)
     (void)batch;
-    return arrow::Status::NotImplemented("Arrow was built without Parquet support");
+    return arrow::Status::NotImplemented("Arrow was built without ORC support");
 #else
     if (!is_open_ || !writer_ || table_ == nullptr)
     {
-        return arrow::Status::Invalid("ParquetTableWriter::WriteBatch() called before OpenPartition()");
+        return arrow::Status::Invalid("OrcTableWriter::WriteBatch() called before OpenPartition()");
     }
     if (batch.metadata == nullptr || batch.metadata != table_)
     {
@@ -164,13 +200,13 @@ arrow::Status ParquetTableWriter::WriteBatch(const TableBatch & batch)
 
     const auto row_count = static_cast<std::int64_t>(batch.row_count);
     auto rb = arrow::RecordBatch::Make(table_->schema, row_count, batch.columns);
-    return writer_->WriteRecordBatch(*rb);
+    return writer_->Write(*rb);
 #endif
 }
 
-arrow::Status ParquetTableWriter::ClosePartition()
+arrow::Status OrcTableWriter::ClosePartition()
 {
-#if !defined(ARROW_PARQUET)
+#if !defined(ARROW_ORC)
     return arrow::Status::OK();
 #else
     if (!is_open_)
@@ -201,7 +237,7 @@ arrow::Status ParquetTableWriter::ClosePartition()
 #endif
 }
 
-std::string ParquetTableWriter::JoinPath(const std::string & base, const std::string & leaf)
+std::string OrcTableWriter::JoinPath(const std::string & base, const std::string & leaf)
 {
     if (base.empty())
     {
