@@ -1,6 +1,7 @@
 #include "Storage/writer.h"
 
 #include "Common/partition.h"
+#include "Storage/orc_writer.h"
 #include "Storage/parquet_writer.h"
 
 #if defined(ENABLE_VORTEX)
@@ -137,6 +138,139 @@ private:
     }
 };
 
+#if defined(ARROW_ORC)
+class OrcFormatDriver final : public IFormatDriver
+{
+public:
+    std::string_view Name() const override { return "orc"; }
+    OutputFormat Format() const override { return OutputFormat::Orc; }
+
+    void RegisterCliOptions(po::options_description & desc) const override
+    {
+        const OrcWriterOptions defaults{};
+        desc.add_options()(
+            "orc-max-partition-rows",
+            po::value<std::int64_t>()->default_value(defaults.max_partition_rows),
+            "Max rows per output ORC partition file (<=0 derives from stripe settings)")(
+            "orc-stripe-bytes",
+            po::value<std::int64_t>()->default_value(defaults.stripe_bytes),
+            "Target ORC stripe size in bytes (<=0 disables byte-based stripe sizing)")(
+            "orc-max-stripe-rows",
+            po::value<std::int64_t>()->default_value(defaults.max_stripe_rows),
+            "Max ORC stripe rows (overrides orc-stripe-bytes when >0)")(
+            "orc-output-buffer-bytes",
+            po::value<std::int64_t>()->default_value(defaults.output_buffer_bytes),
+            "Buffered output stream size in bytes (<=0 disables buffering)")(
+            "orc-compression",
+            po::value<std::string>()->default_value(DefaultCompressionName()),
+            "ORC compression codec: snappy | zstd | lz4 | zlib | uncompressed");
+    }
+
+    arrow::Result<WriterOptions> BuildWriterOptions(const po::variables_map & vm) const override
+    {
+        auto orc_options = std::make_shared<OrcWriterOptions>();
+        orc_options->max_partition_rows = vm["orc-max-partition-rows"].as<std::int64_t>();
+        orc_options->stripe_bytes = vm["orc-stripe-bytes"].as<std::int64_t>();
+        orc_options->max_stripe_rows = vm["orc-max-stripe-rows"].as<std::int64_t>();
+        orc_options->output_buffer_bytes = vm["orc-output-buffer-bytes"].as<std::int64_t>();
+
+        if (orc_options->max_partition_rows < 0)
+        {
+            return arrow::Status::Invalid("orc-max-partition-rows must be >= 0");
+        }
+        if (orc_options->stripe_bytes < 0)
+        {
+            return arrow::Status::Invalid("orc-stripe-bytes must be >= 0");
+        }
+        if (orc_options->max_stripe_rows < 0)
+        {
+            return arrow::Status::Invalid("orc-max-stripe-rows must be >= 0");
+        }
+        if (orc_options->output_buffer_bytes < 0)
+        {
+            return arrow::Status::Invalid("orc-output-buffer-bytes must be >= 0");
+        }
+
+        const auto compression = ToLower(vm["orc-compression"].as<std::string>());
+        RETURN_NOT_OK(ParseCompression(compression, orc_options.get()));
+
+        WriterOptions options;
+        options.format = OutputFormat::Orc;
+        options.format_options = orc_options;
+        return options;
+    }
+
+    std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
+    {
+        const auto & orc_options = OrcTableWriter::ResolveOptions(options);
+        if (orc_options.max_partition_rows > 0)
+        {
+            return ResolvePartCountByTargetRows(scale.RowCount(table), orc_options.max_partition_rows);
+        }
+        const auto stripe_rows = OrcTableWriter::ResolveStripeRows(table, orc_options);
+        return ResolvePartCountByTargetRows(scale.RowCount(table), stripe_rows);
+    }
+
+    std::unique_ptr<ITableWriter> CreateWriter() const override { return std::make_unique<OrcTableWriter>(); }
+
+private:
+    static std::string DefaultCompressionName()
+    {
+#    if defined(ARROW_WITH_SNAPPY)
+        return "snappy";
+#    else
+        return "uncompressed";
+#    endif
+    }
+
+    static arrow::Status ParseCompression(const std::string & compression, OrcWriterOptions * options)
+    {
+        if (compression == "uncompressed")
+        {
+            options->compression = ::arrow::Compression::UNCOMPRESSED;
+            return arrow::Status::OK();
+        }
+        if (compression == "snappy")
+        {
+#    if defined(ARROW_WITH_SNAPPY)
+            options->compression = ::arrow::Compression::SNAPPY;
+            return arrow::Status::OK();
+#    else
+            return arrow::Status::Invalid("orc-compression=snappy requires Arrow built with Snappy");
+#    endif
+        }
+        if (compression == "zstd")
+        {
+#    if defined(ARROW_WITH_ZSTD)
+            options->compression = ::arrow::Compression::ZSTD;
+            return arrow::Status::OK();
+#    else
+            return arrow::Status::Invalid("orc-compression=zstd requires Arrow built with ZSTD");
+#    endif
+        }
+        if (compression == "lz4")
+        {
+#    if defined(ARROW_WITH_LZ4)
+            options->compression = ::arrow::Compression::LZ4;
+            return arrow::Status::OK();
+#    else
+            return arrow::Status::Invalid("orc-compression=lz4 requires Arrow built with LZ4");
+#    endif
+        }
+        if (compression == "zlib")
+        {
+#    if defined(ARROW_WITH_ZLIB)
+            options->compression = ::arrow::Compression::GZIP;
+            return arrow::Status::OK();
+#    else
+            return arrow::Status::Invalid("orc-compression=zlib requires Arrow built with ZLIB");
+#    endif
+        }
+        return arrow::Status::Invalid("Unsupported orc-compression: ", compression);
+    }
+};
+#endif
+
 #if defined(ENABLE_VORTEX)
 class VortexFormatDriver final : public IFormatDriver
 {
@@ -185,6 +319,10 @@ const std::vector<const IFormatDriver *> & EnabledDrivers()
 #if defined(ARROW_PARQUET)
         static const ParquetFormatDriver parquet_driver;
         out.push_back(&parquet_driver);
+#endif
+#if defined(ARROW_ORC)
+        static const OrcFormatDriver orc_driver;
+        out.push_back(&orc_driver);
 #endif
 #if defined(ENABLE_VORTEX)
         static const VortexFormatDriver vortex_driver;
