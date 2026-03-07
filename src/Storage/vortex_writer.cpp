@@ -48,14 +48,50 @@ arrow::Result<std::string> ResolvePath(std::string_view uri, const arrow::fs::Fi
 }
 } // namespace
 
-arrow::Status VortexTableWriter::Open(
+const VortexWriterOptions & VortexTableWriter::ResolveOptions(const WriterOptions & options)
+{
+    static const VortexWriterOptions defaults{};
+
+    if (!options.format_options)
+    {
+        return defaults;
+    }
+
+    auto typed_options = std::dynamic_pointer_cast<const VortexWriterOptions>(options.format_options);
+    if (!typed_options)
+    {
+        return defaults;
+    }
+    return *typed_options;
+}
+
+std::string VortexTableWriter::BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition)
+{
+    if (partition.part_count <= 1)
+    {
+        return table_name + "-1.vortex";
+    }
+    return table_name + "-chunk-" + std::to_string(partition.part_num) + "-of-" + std::to_string(partition.part_count) + ".vortex";
+}
+
+arrow::Status VortexTableWriter::OpenPartition(
     const TableMetadata & table,
     const OutputLocation & output,
     const WriterOptions & options,
+    const PartitionSpec & partition,
     arrow::MemoryPool * pool)
 {
     (void)options;
     (void)pool;
+
+    if (is_open_)
+    {
+        return arrow::Status::Invalid("VortexTableWriter::OpenPartition() called while partition is already open");
+    }
+    if (partition.part_num < 1 || partition.part_count < 1 || partition.part_num > partition.part_count)
+    {
+        return arrow::Status::Invalid("Invalid partition range");
+    }
 
     // Compile-time smoke: proves Vortex C++ headers are reachable.
     vortex::VortexException smoke("vortex-cxx headers are available");
@@ -70,7 +106,7 @@ arrow::Status VortexTableWriter::Open(
     const auto table_dir = JoinPath(base_dir, table.name);
     RETURN_NOT_OK(fs_->CreateDir(table_dir, /*recursive=*/true));
 
-    file_path_ = JoinPath(table_dir, table.name + "-1.vortex");
+    file_path_ = JoinPath(table_dir, BuildPartitionFileName(table.name, partition));
 
     ARROW_ASSIGN_OR_RAISE(const auto info, fs_->GetFileInfo(file_path_));
     if (info.type() != arrow::fs::FileType::NotFound)
@@ -79,37 +115,15 @@ arrow::Status VortexTableWriter::Open(
     }
 
     batches_.clear();
-    partition_open_ = false;
-    return arrow::Status::OK();
-}
-
-arrow::Status VortexTableWriter::BeginPartition(std::int32_t part_num, std::int32_t part_count)
-{
-    if (table_ == nullptr)
-    {
-        return arrow::Status::Invalid("VortexTableWriter::BeginPartition() called before Open()");
-    }
-    if (part_num < 1 || part_count < 1 || part_num > part_count)
-    {
-        return arrow::Status::Invalid("Invalid partition range");
-    }
-    if (partition_open_)
-    {
-        return arrow::Status::Invalid("Partition is already open");
-    }
-    partition_open_ = true;
+    is_open_ = true;
     return arrow::Status::OK();
 }
 
 arrow::Status VortexTableWriter::WriteBatch(const TableBatch & batch)
 {
-    if (table_ == nullptr)
+    if (!is_open_ || table_ == nullptr)
     {
-        return arrow::Status::Invalid("VortexTableWriter::WriteBatch() called before Open()");
-    }
-    if (!partition_open_)
-    {
-        return arrow::Status::Invalid("VortexTableWriter::WriteBatch() called before BeginPartition()");
+        return arrow::Status::Invalid("VortexTableWriter::WriteBatch() called before OpenPartition()");
     }
     if (batch.metadata == nullptr || batch.metadata != table_)
     {
@@ -125,18 +139,13 @@ arrow::Status VortexTableWriter::WriteBatch(const TableBatch & batch)
     return arrow::Status::OK();
 }
 
-arrow::Status VortexTableWriter::EndPartition()
+arrow::Status VortexTableWriter::ClosePartition()
 {
-    if (!partition_open_)
+    if (!is_open_)
     {
-        return arrow::Status::Invalid("VortexTableWriter::EndPartition() called without active partition");
+        return arrow::Status::OK();
     }
-    partition_open_ = false;
-    return arrow::Status::OK();
-}
 
-arrow::Status VortexTableWriter::Close()
-{
     if (table_ != nullptr)
     {
         try
@@ -177,7 +186,7 @@ arrow::Status VortexTableWriter::Close()
     file_path_.clear();
     fs_.reset();
     batches_.clear();
-    partition_open_ = false;
+    is_open_ = false;
     return arrow::Status::OK();
 }
 #endif

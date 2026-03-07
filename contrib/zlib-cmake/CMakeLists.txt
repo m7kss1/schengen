@@ -26,5 +26,6 @@ add_library(_zlib STATIC
 )
 
 target_include_directories(_zlib PUBLIC "${ZLIB_SOURCE_DIR}")
+set_target_properties(_zlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ZLIB::ZLIB ALIAS _zlib)
