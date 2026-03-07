@@ -47,17 +47,17 @@ public:
     static std::int64_t ResolveRowGroupRows(const TableMetadata & table, const ParquetWriterOptions & options);
     static const ParquetWriterOptions & ResolveOptions(const WriterOptions & options);
     static arrow::Result<std::string> GetPath(std::string_view uri, const arrow::fs::FileSystem & fs);
+    static std::string BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition);
 
-    arrow::Status Open(
+    arrow::Status OpenPartition(
         const TableMetadata & table,
         const OutputLocation & output,
         const WriterOptions & options,
+        const PartitionSpec & partition,
         arrow::MemoryPool * pool) override;
 
-    arrow::Status BeginPartition(std::int32_t part_num, std::int32_t part_count) override;
     arrow::Status WriteBatch(const TableBatch & batch) override;
-    arrow::Status EndPartition() override;
-    arrow::Status Close() override;
+    arrow::Status ClosePartition() override;
 
 private:
     static std::string JoinPath(const std::string & base, const std::string & leaf);
@@ -65,6 +65,7 @@ private:
     const TableMetadata * table_ = nullptr;
     arrow::MemoryPool * pool_ = nullptr;
     ParquetWriterOptions options_{};
+    bool is_open_ = false;
 
 #if defined(ARROW_PARQUET)
     FileSystemPtr fs_;
@@ -73,6 +74,4 @@ private:
     std::shared_ptr<arrow::io::OutputStream> sink_;
     std::unique_ptr<::parquet::arrow::FileWriter> writer_;
 #endif
-
-    bool row_group_open_ = false;
 };

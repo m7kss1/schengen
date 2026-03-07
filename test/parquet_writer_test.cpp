@@ -35,8 +35,7 @@ TEST(ParquetWriterTest, WritesAndReadsBack)
     options.format = OutputFormat::Parquet;
     options.format_options = parquet_options;
 
-    auto writer = MakeTableWriter(OutputFormat::Parquet);
-    ASSERT_NE(writer, nullptr);
+    ParquetTableWriter writer;
 
     const auto scale = ScaleConfig{.factor = 1.0};
     const auto plan = MakePartitionPlan(kRegion, scale, /*part_num=*/1, /*part_count=*/1);
@@ -52,17 +51,14 @@ TEST(ParquetWriterTest, WritesAndReadsBack)
     RegionGenerator gen(pool);
     gen.Reset(ctx);
 
-    ASSERT_TRUE(writer->Open(kRegion, output, options, pool).ok());
-    const auto begin_status = writer->BeginPartition(/*part_num=*/1, /*part_count=*/1);
-    ASSERT_TRUE(begin_status.ok()) << begin_status.ToString();
+    const PartitionSpec partition{.part_num = 1, .part_count = 1};
+    ASSERT_TRUE(writer.OpenPartition(kRegion, output, options, partition, pool).ok());
 
     TableBatch batch;
     while (gen.NextBatch(/*max_rows=*/1024, &batch)) {
-        ASSERT_TRUE(writer->WriteBatch(batch).ok());
+        ASSERT_TRUE(writer.WriteBatch(batch).ok());
     }
-    ASSERT_TRUE(writer->EndPartition().ok());
-
-    ASSERT_TRUE(writer->Close().ok());
+    ASSERT_TRUE(writer.ClosePartition().ok());
 
     const fs::path parquet_path = out_dir / "region" / "region-1.parquet";
     ASSERT_TRUE(fs::exists(parquet_path)) << parquet_path.string();

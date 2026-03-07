@@ -1,6 +1,5 @@
-#include "Common/partition.h"
-#include "Common/rands.h"
 #include "Common/registry.h"
+#include "Storage/write_scheduler.h"
 #include "Storage/writer.h"
 #include "Tables/register_tables.h"
 #include "yaclib/async/future.hpp"
@@ -9,15 +8,17 @@
 
 #include <boost/program_options.hpp>
 
-#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace po = boost::program_options;
 
-static std::vector<std::string> DefaultTableNames()
+namespace
+{
+std::vector<std::string> DefaultTableNames()
 {
     return {
         "region",
@@ -31,7 +32,7 @@ static std::vector<std::string> DefaultTableNames()
     };
 }
 
-static void PrintTableList()
+void PrintTableList()
 {
     for (const auto & name : DefaultTableNames())
     {
@@ -39,187 +40,80 @@ static void PrintTableList()
     }
 }
 
-struct GenerationContext
+std::string JoinStrings(const std::vector<std::string> & values, std::string_view separator)
 {
-    const TableRegistry * registry = nullptr;
-    const TextPool * text_pool = nullptr;
-    const ScaleConfig * scale = nullptr;
-    arrow::MemoryPool * pool = nullptr;
-    std::uint64_t batch_rows = 0;
-};
-
-struct PartResult
-{
-    std::vector<TableBatch> batches;
-    std::string error;
-};
-
-static PartResult GeneratePartition(const GenerationContext & ctx, const TableMetadata & table, std::int32_t part, std::int32_t part_count)
-{
-    PartResult result;
-    try
+    if (values.empty())
     {
-        auto generator = ctx.registry->CreateGenerator(table.name, ctx.pool);
-        if (!generator)
-        {
-            result.error = "Failed to create generator for table: " + table.name;
-            return result;
-        }
-
-        GeneratorContext gen_ctx;
-        gen_ctx.scale = *ctx.scale;
-        gen_ctx.partition = MakePartitionPlan(table, *ctx.scale, part, part_count);
-        gen_ctx.text_pool = ctx.text_pool;
-        gen_ctx.pool = ctx.pool;
-        generator->Reset(gen_ctx);
-
-        const auto part_rows = gen_ctx.partition.range.end_row - gen_ctx.partition.range.start_row;
-        if (part_rows > 0)
-        {
-            const auto expected_batches = (part_rows + ctx.batch_rows - 1) / ctx.batch_rows;
-            result.batches.reserve(static_cast<std::size_t>(expected_batches));
-        }
-
-        TableBatch batch;
-        while (generator->NextBatch(ctx.batch_rows, &batch))
-        {
-            result.batches.emplace_back(std::move(batch));
-        }
+        return {};
     }
-    catch (const std::exception & ex)
+
+    std::string out;
+    out.reserve(values.front().size() * values.size());
+    for (std::size_t i = 0; i < values.size(); ++i)
     {
-        result.error = ex.what();
+        if (i > 0)
+        {
+            out += separator;
+        }
+        out += values[i];
     }
-    catch (...)
-    {
-        result.error = "Unknown error during partition generation";
-    }
-    return result;
+    return out;
 }
 
-static yaclib::FutureOn<PartResult> LaunchPartitionTask(
-    yaclib::IExecutor & executor, const GenerationContext & ctx, const TableMetadata & table, std::int32_t part, std::int32_t part_count)
+void PrintFormatList()
 {
-    return yaclib::Run(executor, [&ctx, &table, part, part_count]() { return GeneratePartition(ctx, table, part, part_count); });
+    for (const auto & name : SupportedFormatNames())
+    {
+        std::cout << name << "\n";
+    }
 }
 
-static int GenerateTable(
-    const GenerationContext & ctx,
-    const TableMetadata & table,
-    const OutputLocation & output,
-    const WriterOptions & writer_options,
-    yaclib::IExecutor & part_executor)
-{
-    const auto part_count = ResolveWriterPartCount(table, *ctx.scale, writer_options);
-
-    std::vector<yaclib::FutureOn<PartResult>> part_futures;
-    part_futures.reserve(static_cast<std::size_t>(part_count));
-    for (std::int32_t part = 1; part <= part_count; ++part)
-    {
-        part_futures.emplace_back(LaunchPartitionTask(part_executor, ctx, table, part, part_count));
-    }
-
-    auto writer = MakeTableWriter(writer_options.format);
-    if (!writer)
-    {
-        std::cerr << "Writer not available for table: " << table.name << "\n";
-        return 2;
-    }
-
-    const auto open_status = writer->Open(table, output, writer_options, ctx.pool);
-    if (!open_status.ok())
-    {
-        std::cerr << "Writer open failed: " << open_status.ToString() << "\n";
-        return 2;
-    }
-
-    for (std::int32_t part = 1; part <= part_count; ++part)
-    {
-        auto part_result = std::move(part_futures[part - 1]).Get();
-        PartResult payload;
-        try
-        {
-            payload = std::move(part_result).Ok();
-        }
-        catch (const std::exception & ex)
-        {
-            std::cerr << "Partition " << part << " failed: " << ex.what() << "\n";
-            return 2;
-        }
-        if (!payload.error.empty())
-        {
-            std::cerr << "Partition " << part << " failed: " << payload.error << "\n";
-            return 2;
-        }
-        if (payload.batches.empty())
-        {
-            continue;
-        }
-
-        const auto begin_status = writer->BeginPartition(part, part_count);
-        if (!begin_status.ok())
-        {
-            std::cerr << "Failed to begin partition: " << begin_status.ToString() << "\n";
-            return 2;
-        }
-
-        for (const auto & batch : payload.batches)
-        {
-            const auto write_status = writer->WriteBatch(batch);
-            if (!write_status.ok())
-            {
-                std::cerr << "Failed to write data: " << write_status.ToString() << "\n";
-                return 2;
-            }
-        }
-
-        const auto end_status = writer->EndPartition();
-        if (!end_status.ok())
-        {
-            std::cerr << "Failed to end partition: " << end_status.ToString() << "\n";
-            return 2;
-        }
-    }
-
-    const auto close_status = writer->Close();
-    if (!close_status.ok())
-    {
-        std::cerr << "Failed to close writer: " << close_status.ToString() << "\n";
-        return 2;
-    }
-
-    return 0;
-}
-
-static yaclib::FutureOn<int> LaunchTableTask(
+yaclib::FutureOn<int> LaunchTableTask(
     yaclib::IExecutor & table_executor,
     const GenerationContext & ctx,
     const TableMetadata & table,
     const OutputLocation & output,
     const WriterOptions & writer_options,
+    const IFormatDriver * format_driver,
+    const WriteSchedulerOptions & scheduler_options,
     yaclib::IExecutor & part_executor)
 {
     return yaclib::Run(
         table_executor,
-        [&ctx, &table, &output, &writer_options, &part_executor]()
-        { return GenerateTable(ctx, table, output, writer_options, part_executor); });
+        [&ctx, &table, &output, &writer_options, format_driver, &scheduler_options, &part_executor]() {
+            return GenerateTableWithStrategy(
+                ctx, table, output, writer_options, *format_driver, scheduler_options, part_executor);
+        });
+}
 }
 
 int main(int argc, char ** argv)
 {
+    const auto supported_formats = SupportedFormatNames();
+    const auto default_output_format = supported_formats.empty() ? std::string("parquet") : supported_formats.front();
+
     double scale_factor = 1.0;
-    std::string output_format = "parquet";
+    std::string output_format = default_output_format;
     std::string output_path = ".";
     std::vector<std::string> tables;
     std::uint64_t batch_rows = 128 * 1024;
 
+    const std::string supported_formats_text = JoinStrings(supported_formats, ", ");
+    const std::string output_format_help = supported_formats.empty()
+                                               ? "Set tables output format"
+                                               : "Set tables output format (" + supported_formats_text + ")";
+
     po::options_description desc("Allowed options");
-    desc.add_options()("help", "Help message")("list-tables", "List available tables")(
+    desc.add_options()("help", "Help message")("list-tables", "List available tables")("list-formats", "List available formats")(
         "scale-factor", po::value<double>(&scale_factor)->default_value(1.0), "Set scale factor")(
-        "output-format", po::value<std::string>(&output_format)->default_value("parquet"), "Set tables output format")(
+        "output-format",
+        po::value<std::string>(&output_format)->default_value(default_output_format),
+        output_format_help.c_str())(
         "output-path", po::value<std::string>(&output_path)->default_value("."), "Set output directory path")(
         "table", po::value<std::vector<std::string>>(&tables)->multitoken(), "Specify tables to generate")(
         "batch-rows", po::value<std::uint64_t>(&batch_rows)->default_value(128 * 1024), "Control rows per batch count");
+    RegisterFormatCliOptions(desc);
+    RegisterWriteSchedulerCliOptions(desc);
 
     po::variables_map vm;
     try
@@ -242,6 +136,11 @@ int main(int argc, char ** argv)
     if (vm.count("list-tables"))
     {
         PrintTableList();
+        return 0;
+    }
+    if (vm.count("list-formats"))
+    {
+        PrintFormatList();
         return 0;
     }
 
@@ -267,31 +166,35 @@ int main(int argc, char ** argv)
         tables = DefaultTableNames();
     }
 
-    OutputFormat format = OutputFormat::Parquet;
-    if (output_format == "parquet")
+    auto format_driver_result = ResolveFormatDriver(output_format);
+    if (!format_driver_result.ok())
     {
-        format = OutputFormat::Parquet;
-    }
-#if defined(ENABLE_VORTEX)
-    else if (output_format == "vortex")
-    {
-        format = OutputFormat::Vortex;
-    }
-#endif
-    else
-    {
-        std::cerr << "Unsupported output format: " << output_format << "\n";
+        std::cerr << format_driver_result.status().ToString() << "\n";
         return 2;
     }
+    const IFormatDriver * format_driver = std::move(format_driver_result).ValueOrDie();
+
+    auto writer_options_result = format_driver->BuildWriterOptions(vm);
+    if (!writer_options_result.ok())
+    {
+        std::cerr << "Invalid writer options: " << writer_options_result.status().ToString() << "\n";
+        return 2;
+    }
+    WriterOptions writer_options = std::move(writer_options_result).ValueOrDie();
+
+    auto scheduler_options_result = BuildWriteSchedulerOptions(vm);
+    if (!scheduler_options_result.ok())
+    {
+        std::cerr << "Invalid write scheduler options: " << scheduler_options_result.status().ToString() << "\n";
+        return 2;
+    }
+    const WriteSchedulerOptions scheduler_options = std::move(scheduler_options_result).ValueOrDie();
 
     const ScaleConfig scale{.factor = scale_factor};
     const OutputLocation output{.uri = output_path};
-    WriterOptions writer_options;
-    writer_options.format = format;
 
     arrow::MemoryPool * pool = arrow::default_memory_pool();
     static const TextPool & text_pool = TextPool::Default();
-    /* Separate executors avoid blocking tasks waiting on work scheduled to the same pool */
     auto table_executor = yaclib::MakeFairThreadPool();
     auto part_executor = yaclib::MakeFairThreadPool();
 
@@ -318,7 +221,8 @@ int main(int argc, char ** argv)
             return 2;
         }
 
-        table_futures.emplace_back(LaunchTableTask(*table_executor, ctx, *metadata, output, writer_options, *part_executor));
+        table_futures.emplace_back(LaunchTableTask(
+            *table_executor, ctx, *metadata, output, writer_options, format_driver, scheduler_options, *part_executor));
     }
 
     int exit_code = 0;
@@ -347,3 +251,4 @@ int main(int argc, char ** argv)
 
     return exit_code;
 }
+

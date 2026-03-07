@@ -203,7 +203,7 @@ if (TARGET sch::arrow)
     if (TARGET sch::yaclib AND SCHENGEN_BUILD_FORMAT_TARGETS)
       find_package(Boost COMPONENTS program_options REQUIRED)
 
-      add_executable(schengen_main src/main.cpp)
+      add_executable(schengen_main src/main.cpp src/Storage/write_scheduler.cpp)
       target_compile_features(schengen_main PRIVATE cxx_std_17)
       target_include_directories(schengen_main PRIVATE ${PROJECT_SOURCE_DIR}/src)
       if (DEFINED ARROW_INCLUDE_DIRS)
