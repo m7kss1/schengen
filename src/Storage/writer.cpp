@@ -102,6 +102,10 @@ public:
     }
 
     WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+    OrderedWriteExecutionModel OrderedExecutionModel() const override
+    {
+        return OrderedWriteExecutionModel::NativeMultiplexed;
+    }
 
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
@@ -220,6 +224,10 @@ public:
     }
 
     WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+    OrderedWriteExecutionModel OrderedExecutionModel() const override
+    {
+        return OrderedWriteExecutionModel::NativeMultiplexed;
+    }
 
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
@@ -351,6 +359,10 @@ public:
 
     bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::SingleFileOrdered; }
     WriteStrategy PreferredStrategy() const override { return WriteStrategy::SingleFileOrdered; }
+    OrderedWriteExecutionModel OrderedExecutionModel() const override
+    {
+        return OrderedWriteExecutionModel::ForeignStreaming;
+    }
 
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
@@ -382,7 +394,13 @@ public:
             "Generation partition rows for single-file Vortex output (<=0 disables partition splitting)")(
             "vortex-max-partition-rows",
             po::value<std::int64_t>()->default_value(defaults.target_partition_rows),
-            "Deprecated alias for vortex-target-partition-rows");
+            "Deprecated alias for vortex-target-partition-rows")(
+            "vortex-row-block-size",
+            po::value<std::int64_t>()->default_value(defaults.row_block_size),
+            "Vortex row block size used for zoned layout statistics (>0)")(
+            "vortex-output-buffer-bytes",
+            po::value<std::int64_t>()->default_value(defaults.output_buffer_bytes),
+            "Buffered output size in bytes for local Vortex files (>0)");
     }
 
     arrow::Result<WriterOptions> BuildWriterOptions(const po::variables_map & vm) const override
@@ -400,9 +418,19 @@ public:
         }
 
         vortex_options->target_partition_rows = primary_explicit ? primary_rows : legacy_rows;
+        vortex_options->row_block_size = vm["vortex-row-block-size"].as<std::int64_t>();
+        vortex_options->output_buffer_bytes = vm["vortex-output-buffer-bytes"].as<std::int64_t>();
         if (vortex_options->target_partition_rows < 0)
         {
             return arrow::Status::Invalid("vortex-target-partition-rows must be >= 0");
+        }
+        if (vortex_options->row_block_size <= 0)
+        {
+            return arrow::Status::Invalid("vortex-row-block-size must be > 0");
+        }
+        if (vortex_options->output_buffer_bytes <= 0)
+        {
+            return arrow::Status::Invalid("vortex-output-buffer-bytes must be > 0");
         }
 
         WriterOptions options;
@@ -413,6 +441,10 @@ public:
 
     bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::SingleFileOrdered; }
     WriteStrategy PreferredStrategy() const override { return WriteStrategy::SingleFileOrdered; }
+    OrderedWriteExecutionModel OrderedExecutionModel() const override
+    {
+        return OrderedWriteExecutionModel::ForeignStreaming;
+    }
 
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {

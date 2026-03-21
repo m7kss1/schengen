@@ -36,6 +36,12 @@ enum class WriteStrategy : uint8_t
     SingleFileOrdered,
 };
 
+enum class OrderedWriteExecutionModel : uint8_t
+{
+    NativeMultiplexed,
+    ForeignStreaming,
+};
+
 struct OutputLocation
 {
     /*
@@ -111,6 +117,7 @@ public:
     virtual arrow::Result<WriterOptions> BuildWriterOptions(const boost::program_options::variables_map & vm) const = 0;
     virtual bool SupportsStrategy(WriteStrategy strategy) const = 0;
     virtual WriteStrategy PreferredStrategy() const = 0;
+    virtual OrderedWriteExecutionModel OrderedExecutionModel() const = 0;
     virtual std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options)
         const
         = 0;

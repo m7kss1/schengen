@@ -12,6 +12,11 @@ arrow::Status InvalidOption(const char * option_name)
 {
     return arrow::Status::Invalid(option_name, " must be >= 0");
 }
+
+arrow::Status InvalidPositiveOption(const char * option_name)
+{
+    return arrow::Status::Invalid(option_name, " must be > 0");
+}
 } // namespace
 
 const VortexWriterOptions & VortexOrderedWriter::ResolveOptions(const WriterOptions & options)
@@ -51,6 +56,8 @@ arrow::Status VortexOrderedWriter::OpenTable(
 
     const auto & vortex_options = ResolveOptions(options);
     RETURN_NOT_OK(ValidateNonNegative(vortex_options.target_partition_rows, "vortex-target-partition-rows"));
+    RETURN_NOT_OK(ValidatePositive(vortex_options.row_block_size, "vortex-row-block-size"));
+    RETURN_NOT_OK(ValidatePositive(vortex_options.output_buffer_bytes, "vortex-output-buffer-bytes"));
 
     table_ = &table;
     file_uri_ = BuildFilePath(output, table.name);
@@ -59,8 +66,10 @@ arrow::Status VortexOrderedWriter::OpenTable(
     RETURN_NOT_OK(arrow::ExportSchema(*table.schema, &schema));
 
     const VortexWriterOptionsC bridge_options{
-        .abi_version = 1,
+        .abi_version = 2,
         .reserved = 0,
+        .row_block_size = vortex_options.row_block_size,
+        .output_buffer_bytes = vortex_options.output_buffer_bytes,
     };
     if (vortex_writer_open(file_uri_.c_str(), &schema, &bridge_options, &handle_) != 0)
     {
@@ -192,6 +201,15 @@ arrow::Status VortexOrderedWriter::ValidateNonNegative(std::int64_t value, const
     if (value < 0)
     {
         return InvalidOption(option_name);
+    }
+    return arrow::Status::OK();
+}
+
+arrow::Status VortexOrderedWriter::ValidatePositive(std::int64_t value, const char * option_name)
+{
+    if (value <= 0)
+    {
+        return InvalidPositiveOption(option_name);
     }
     return arrow::Status::OK();
 }
