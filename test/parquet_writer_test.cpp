@@ -16,6 +16,22 @@
 
 static const TextPool & text_pool = TextPool::Default();
 
+TEST(ParquetFormatDriverTest, UsesNativeMultiplexedExecutionModel)
+{
+#if !defined(ARROW_PARQUET)
+    GTEST_SKIP() << "Arrow was built without Parquet support (ARROW_PARQUET is not defined)";
+#else
+    auto driver_result = ResolveFormatDriver("parquet");
+    ASSERT_TRUE(driver_result.ok()) << driver_result.status().ToString();
+    const IFormatDriver * driver = driver_result.ValueOrDie();
+
+    EXPECT_EQ(driver->PreferredStrategy(), WriteStrategy::ParallelPartitionFiles);
+    EXPECT_TRUE(driver->SupportsStrategy(WriteStrategy::ParallelPartitionFiles));
+    EXPECT_TRUE(driver->SupportsStrategy(WriteStrategy::SingleFileOrdered));
+    EXPECT_EQ(driver->OrderedExecutionModel(), OrderedWriteExecutionModel::NativeMultiplexed);
+#endif
+}
+
 TEST(ParquetWriterTest, WritesAndReadsBack)
 {
 #if !defined(ARROW_PARQUET)

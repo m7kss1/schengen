@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
 #include "region.h"
+#include "register_tables.h"
 #include "vortex_bridge.h"
 #include "vortex_writer.h"
 #include "write_scheduler.h"
 #include "writer.h"
+#include "yaclib/exe/inline.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -33,6 +35,19 @@ GeneratorContext MakeRegionContext(arrow::MemoryPool * pool, std::int32_t part_n
 std::shared_ptr<VortexWriterOptions> MakeDefaultVortexOptions()
 {
     return std::make_shared<VortexWriterOptions>();
+}
+
+GenerationContext MakeGenerationContext(arrow::MemoryPool * pool, const ScaleConfig & scale, std::uint64_t batch_rows)
+{
+    RegisterTables();
+
+    GenerationContext ctx;
+    ctx.registry = &TableRegistry::Instance();
+    ctx.text_pool = &vortex_text_pool;
+    ctx.scale = &scale;
+    ctx.pool = pool;
+    ctx.batch_rows = batch_rows;
+    return ctx;
 }
 
 arrow::Result<WriterOptions> ParseVortexWriterOptions(const IFormatDriver & driver, const std::vector<std::string> & args)
@@ -189,6 +204,7 @@ TEST(VortexFormatDriverTest, PrefersSingleFileOrdered)
     EXPECT_EQ(driver->PreferredStrategy(), WriteStrategy::SingleFileOrdered);
     EXPECT_TRUE(driver->SupportsStrategy(WriteStrategy::SingleFileOrdered));
     EXPECT_FALSE(driver->SupportsStrategy(WriteStrategy::ParallelPartitionFiles));
+    EXPECT_EQ(driver->OrderedExecutionModel(), OrderedWriteExecutionModel::ForeignStreaming);
 
     WriteSchedulerOptions auto_options;
     auto auto_strategy = ResolveSelectedWriteStrategy(auto_options, *driver);
@@ -216,6 +232,8 @@ TEST(VortexFormatDriverTest, SupportsPrimaryAndLegacyPartitionOptions)
     ASSERT_TRUE(primary_options_result.ok()) << primary_options_result.status().ToString();
     auto primary_options = primary_options_result.ValueOrDie();
     EXPECT_EQ(VortexOrderedWriter::ResolveOptions(primary_options).target_partition_rows, 17);
+    EXPECT_EQ(VortexOrderedWriter::ResolveOptions(primary_options).row_block_size, 8192);
+    EXPECT_EQ(VortexOrderedWriter::ResolveOptions(primary_options).output_buffer_bytes, 16 * 1024 * 1024);
 
     auto legacy_options_result = ParseVortexWriterOptions(*driver, {"--vortex-max-partition-rows", "19"});
     ASSERT_TRUE(legacy_options_result.ok()) << legacy_options_result.status().ToString();
@@ -226,5 +244,73 @@ TEST(VortexFormatDriverTest, SupportsPrimaryAndLegacyPartitionOptions)
         *driver, {"--vortex-target-partition-rows", "17", "--vortex-max-partition-rows", "19"});
     ASSERT_FALSE(conflict_result.ok());
     EXPECT_NE(conflict_result.status().ToString().find("must match"), std::string::npos);
+
+    auto tuned_options_result = ParseVortexWriterOptions(
+        *driver,
+        {"--vortex-target-partition-rows", "23", "--vortex-row-block-size", "16384", "--vortex-output-buffer-bytes", "1048576"});
+    ASSERT_TRUE(tuned_options_result.ok()) << tuned_options_result.status().ToString();
+    auto tuned_options = tuned_options_result.ValueOrDie();
+    const auto & resolved_options = VortexOrderedWriter::ResolveOptions(tuned_options);
+    EXPECT_EQ(resolved_options.target_partition_rows, 23);
+    EXPECT_EQ(resolved_options.row_block_size, 16384);
+    EXPECT_EQ(resolved_options.output_buffer_bytes, 1048576);
+
+    auto invalid_row_block_result = ParseVortexWriterOptions(*driver, {"--vortex-row-block-size", "0"});
+    ASSERT_FALSE(invalid_row_block_result.ok());
+    EXPECT_NE(invalid_row_block_result.status().ToString().find("vortex-row-block-size"), std::string::npos);
+
+    auto invalid_output_buffer_result = ParseVortexWriterOptions(*driver, {"--vortex-output-buffer-bytes", "-1"});
+    ASSERT_FALSE(invalid_output_buffer_result.ok());
+    EXPECT_NE(invalid_output_buffer_result.status().ToString().find("vortex-output-buffer-bytes"), std::string::npos);
+#endif
+}
+
+TEST(VortexWriteSchedulerTest, SingleFileOrderedStreamsPartitionsDirectly)
+{
+#if !defined(ENABLE_VORTEX)
+    GTEST_SKIP() << "Vortex is not enabled";
+#else
+    namespace fs = std::filesystem;
+    const fs::path out_dir = fs::path("vortex_scheduler_ordered_out");
+    std::error_code ec;
+    fs::remove_all(out_dir, ec);
+    fs::create_directories(out_dir, ec);
+
+    auto driver_result = ResolveFormatDriver("vortex");
+    ASSERT_TRUE(driver_result.ok()) << driver_result.status().ToString();
+    const IFormatDriver * driver = driver_result.ValueOrDie();
+
+    auto vortex_options = MakeDefaultVortexOptions();
+    vortex_options->target_partition_rows = 2;
+    vortex_options->row_block_size = 4;
+    vortex_options->output_buffer_bytes = 4096;
+
+    WriterOptions writer_options;
+    writer_options.format = OutputFormat::Vortex;
+    writer_options.format_options = vortex_options;
+
+    WriteSchedulerOptions scheduler_options;
+    scheduler_options.strategy = WriteStrategy::SingleFileOrdered;
+    scheduler_options.queue_capacity = 2;
+
+    arrow::MemoryPool * pool = arrow::default_memory_pool();
+    const ScaleConfig scale{.factor = 1.0};
+    auto generation_ctx = MakeGenerationContext(pool, scale, /*batch_rows=*/2);
+    const OutputLocation output{.uri = out_dir.string()};
+    auto & part_executor = yaclib::MakeInline();
+
+    ASSERT_EQ(
+        GenerateTableWithStrategy(generation_ctx, kRegion, output, writer_options, *driver, scheduler_options, part_executor),
+        0);
+
+    const fs::path file_path = out_dir / "region" / "region-1.vortex";
+    ASSERT_TRUE(fs::exists(file_path)) << file_path.string();
+
+    VortexFileInfoC info{.row_count = 0, .field_names_csv = nullptr};
+    ASSERT_EQ(vortex_file_inspect(file_path.c_str(), &info), 0) << vortex_bridge_last_error();
+    ASSERT_NE(info.field_names_csv, nullptr);
+    EXPECT_EQ(info.row_count, 5);
+    EXPECT_EQ(std::string(info.field_names_csv), "r_regionkey,r_name,r_comment");
+    vortex_file_info_destroy(&info);
 #endif
 }

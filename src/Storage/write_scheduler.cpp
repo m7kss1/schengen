@@ -757,7 +757,7 @@ struct BatchMessage
     std::string error;
 };
 
-int RunSingleFileOrdered(
+int RunNativeMultiplexedOrdered(
     const GenerationContext & ctx,
     const TableMetadata & table,
     const OutputLocation & output,
@@ -1033,6 +1033,117 @@ int RunSingleFileOrdered(
     }
     return 0;
 }
+
+int RunForeignStreamingOrdered(
+    const GenerationContext & ctx,
+    const TableMetadata & table,
+    const OutputLocation & output,
+    const WriterOptions & writer_options,
+    const IFormatDriver & format_driver,
+    std::int32_t part_count,
+    const WriteSchedulerOptions & scheduler_options,
+    yaclib::IExecutor & part_executor)
+{
+    (void)scheduler_options;
+    (void)part_executor;
+
+    auto writer = format_driver.CreateOrderedWriter();
+    if (writer == nullptr)
+    {
+        std::cerr << "Ordered writer is not available for format " << format_driver.Name() << "\n";
+        return 2;
+    }
+
+    bool table_open = false;
+
+    auto close_writer = [&]() -> arrow::Status {
+        if (!table_open)
+        {
+            return arrow::Status::OK();
+        }
+
+        table_open = false;
+        return writer->CloseTable();
+    };
+
+    auto fail = [&](const std::string & message) -> int {
+        std::cerr << "single-file-ordered write failed for table " << table.name << ": " << message << "\n";
+        const auto close_status = close_writer();
+        if (!close_status.ok())
+        {
+            std::cerr << "single-file-ordered cleanup failed for table " << table.name << ": " << close_status.ToString()
+                      << "\n";
+        }
+        return 2;
+    };
+
+    try
+    {
+        const auto open_status = writer->OpenTable(table, output, writer_options, ctx.pool);
+        if (!open_status.ok())
+        {
+            std::cerr << "Failed to open ordered output for table " << table.name << ": " << open_status.ToString() << "\n";
+            return 2;
+        }
+        table_open = true;
+
+        for (std::int32_t part = 1; part <= part_count; ++part)
+        {
+            const PartitionSpec partition{.part_num = part, .part_count = part_count};
+            const auto begin_status = writer->BeginInputPartition(partition);
+            if (!begin_status.ok())
+            {
+                return fail(begin_status.ToString());
+            }
+
+            auto generator = ctx.registry->CreateGenerator(table.name, ctx.pool);
+            if (!generator)
+            {
+                return fail("Failed to create generator for table: " + table.name);
+            }
+
+            GeneratorContext gen_ctx;
+            gen_ctx.scale = *ctx.scale;
+            gen_ctx.partition = MakePartitionPlan(table, *ctx.scale, part, part_count);
+            gen_ctx.text_pool = ctx.text_pool;
+            gen_ctx.pool = ctx.pool;
+            generator->Reset(gen_ctx);
+
+            TableBatch batch;
+            while (generator->NextBatch(ctx.batch_rows, &batch))
+            {
+                const auto write_status = writer->WriteBatch(batch);
+                if (!write_status.ok())
+                {
+                    return fail(write_status.ToString());
+                }
+            }
+
+            const auto end_status = writer->EndInputPartition();
+            if (!end_status.ok())
+            {
+                return fail(end_status.ToString());
+            }
+        }
+    }
+    catch (const std::exception & ex)
+    {
+        return fail(ex.what());
+    }
+    catch (...)
+    {
+        return fail("Unknown partition generation error");
+    }
+
+    const auto close_status = close_writer();
+    if (!close_status.ok())
+    {
+        std::cerr << "single-file-ordered write failed for table " << table.name << ": " << close_status.ToString() << "\n";
+        return 2;
+    }
+
+    return 0;
+}
 } // namespace
 
 void RegisterWriteSchedulerCliOptions(po::options_description & desc)
@@ -1125,8 +1236,18 @@ int GenerateTableWithStrategy(
             return RunParallelPartitionFiles(
                 ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
         case WriteStrategy::SingleFileOrdered:
-            return RunSingleFileOrdered(
-                ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+            switch (format_driver.OrderedExecutionModel())
+            {
+                case OrderedWriteExecutionModel::NativeMultiplexed:
+                    return RunNativeMultiplexedOrdered(
+                        ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+                case OrderedWriteExecutionModel::ForeignStreaming:
+                    return RunForeignStreamingOrdered(
+                        ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+                default:
+                    std::cerr << "Unsupported ordered execution model for format " << format_driver.Name() << "\n";
+                    return 2;
+            }
         default:
             return 2;
     }

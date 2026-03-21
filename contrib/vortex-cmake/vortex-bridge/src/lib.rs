@@ -1,11 +1,14 @@
 use std::ffi::{CStr, CString, c_char};
+use std::future::ready;
+use std::fs::OpenOptions;
+use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 
 use arrow_array::ffi::{FFI_ArrowArray, from_ffi_and_data_type};
-use arrow_array::{RecordBatch, StructArray};
+use arrow_array::StructArray;
 use arrow_schema::ffi::FFI_ArrowSchema;
 use arrow_schema::{DataType, Schema as ArrowSchema, SchemaRef};
 use futures::channel::mpsc::{Receiver, Sender, channel};
@@ -23,8 +26,8 @@ use vortex::array::arrow::FromArrowArray;
 use vortex::array::stream::ArrayStreamAdapter;
 use vortex::dtype::DType;
 use vortex::dtype::arrow::FromArrowType;
-use vortex::file::{OpenOptionsSessionExt, WriteOptionsSessionExt};
-use vortex::io::VortexWrite;
+use vortex::file::{OpenOptionsSessionExt, WriteOptionsSessionExt, WriteStrategyBuilder};
+use vortex::io::{IoBuf, VortexWrite};
 use vortex::io::object_store::ObjectStoreWrite;
 use vortex::io::runtime::BlockingRuntime;
 use vortex::io::runtime::current::CurrentThreadRuntime;
@@ -35,6 +38,8 @@ use vortex::session::VortexSession;
 pub struct VortexWriterOptionsC {
     pub abi_version: u32,
     pub reserved: u32,
+    pub row_block_size: i64,
+    pub output_buffer_bytes: i64,
 }
 
 #[repr(C)]
@@ -54,9 +59,32 @@ enum OutputTarget {
     },
 }
 
+#[derive(Clone, Copy)]
+struct WriterConfig {
+    row_block_size: usize,
+    output_buffer_bytes: usize,
+}
+
+struct StdIoWriteAdapter<W>(W);
+
+impl<W: Write + Unpin> VortexWrite for StdIoWriteAdapter<W> {
+    async fn write_all<B: IoBuf>(&mut self, buffer: B) -> io::Result<B> {
+        self.0.write_all(buffer.as_slice())?;
+        Ok(buffer)
+    }
+
+    fn flush(&mut self) -> impl std::future::Future<Output = io::Result<()>> {
+        ready(self.0.flush())
+    }
+
+    fn shutdown(&mut self) -> impl std::future::Future<Output = io::Result<()>> {
+        ready(Ok(()))
+    }
+}
+
 pub struct VortexWriterHandle {
     schema: SchemaRef,
-    sender: Option<Sender<RecordBatch>>,
+    sender: Option<Sender<ArrayRef>>,
     worker: Option<JoinHandle<Result<(), String>>>,
     last_error: CString,
     finished: bool,
@@ -65,7 +93,7 @@ pub struct VortexWriterHandle {
 impl VortexWriterHandle {
     fn new(
         schema: SchemaRef,
-        sender: Sender<RecordBatch>,
+        sender: Sender<ArrayRef>,
         worker: JoinHandle<Result<(), String>>,
     ) -> Self {
         Self {
@@ -128,7 +156,7 @@ fn schema_from_raw(schema: *mut FFI_ArrowSchema) -> Result<SchemaRef, String> {
     Ok(Arc::new(schema))
 }
 
-fn batch_from_raw(array: *mut FFI_ArrowArray, schema: &SchemaRef) -> Result<RecordBatch, String> {
+fn array_from_raw(array: *mut FFI_ArrowArray, schema: &SchemaRef) -> Result<ArrayRef, String> {
     if array.is_null() {
         return Err("array must not be null".to_string());
     }
@@ -136,22 +164,32 @@ fn batch_from_raw(array: *mut FFI_ArrowArray, schema: &SchemaRef) -> Result<Reco
     let data = unsafe { from_ffi_and_data_type(ffi_array, DataType::Struct(schema.fields.clone())) }
         .map_err(|err| err.to_string())?;
     let struct_array = StructArray::from(data);
-    RecordBatch::try_new(schema.clone(), struct_array.columns().to_vec()).map_err(|err| err.to_string())
+    ArrayRef::from_arrow(&struct_array, false).map_err(|err| err.to_string())
 }
 
 fn build_dtype(schema: &SchemaRef) -> DType {
     DType::from_arrow(schema.clone())
 }
 
-fn parse_writer_options(options: *const VortexWriterOptionsC) -> Result<(), String> {
+fn parse_positive_usize(value: i64, field_name: &str) -> Result<usize, String> {
+    if value <= 0 {
+        return Err(format!("{field_name} must be > 0"));
+    }
+    usize::try_from(value).map_err(|_| format!("{field_name} is out of range"))
+}
+
+fn parse_writer_options(options: *const VortexWriterOptionsC) -> Result<WriterConfig, String> {
     if options.is_null() {
-        return Ok(());
+        return Err("options must not be null".to_string());
     }
     let options = unsafe { &*options };
-    if options.abi_version > 1 {
+    if options.abi_version != 2 {
         return Err(format!("unsupported Vortex bridge ABI version: {}", options.abi_version));
     }
-    Ok(())
+    Ok(WriterConfig {
+        row_block_size: parse_positive_usize(options.row_block_size, "row_block_size")?,
+        output_buffer_bytes: parse_positive_usize(options.output_buffer_bytes, "output_buffer_bytes")?,
+    })
 }
 
 fn make_object_store(url: &Url) -> Result<Arc<dyn ObjectStore>, String> {
@@ -232,29 +270,37 @@ fn session_for_runtime(runtime: &CurrentThreadRuntime) -> VortexSession {
     VortexSession::default().with_handle(runtime.handle())
 }
 
+fn build_write_options(session: &VortexSession, config: WriterConfig) -> vortex::file::VortexWriteOptions {
+    let strategy = WriteStrategyBuilder::default()
+        .with_row_block_size(config.row_block_size)
+        .build();
+    session.write_options().with_strategy(strategy)
+}
+
 fn write_batches(
     target: OutputTarget,
     dtype: DType,
-    receiver: Receiver<RecordBatch>,
+    config: WriterConfig,
+    receiver: Receiver<ArrayRef>,
 ) -> Result<(), String> {
     let runtime = CurrentThreadRuntime::new();
     let session = session_for_runtime(&runtime);
 
     runtime.block_on(async move {
-        let stream = receiver.map(|batch| ArrayRef::from_arrow(batch, false));
+        let stream = receiver.map(Ok);
         let array_stream = ArrayStreamAdapter::new(dtype, stream);
+        let write_options = build_write_options(&session, config);
 
         match target {
             OutputTarget::Local(path) => {
-                let mut file = async_fs::File::create(&path)
-                    .await
+                let file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
                     .map_err(|err| err.to_string())?;
-                session
-                    .write_options()
-                    .write(&mut file, array_stream)
-                    .await
-                    .map_err(|err| err.to_string())?;
-                VortexWrite::shutdown(&mut file)
+                let sink = StdIoWriteAdapter(BufWriter::with_capacity(config.output_buffer_bytes, file));
+                write_options
+                    .write(sink, array_stream)
                     .await
                     .map_err(|err| err.to_string())?;
             }
@@ -262,8 +308,7 @@ fn write_batches(
                 let mut writer = ObjectStoreWrite::new(store, &path)
                     .await
                     .map_err(|err| err.to_string())?;
-                session
-                    .write_options()
+                write_options
                     .write(&mut writer, array_stream)
                     .await
                     .map_err(|err| err.to_string())?;
@@ -321,7 +366,7 @@ pub extern "C" fn vortex_writer_open(
             return Err("out_handle must not be null".to_string());
         }
 
-        parse_writer_options(options)?;
+        let config = parse_writer_options(options)?;
 
         let uri = c_string_to_owned(uri, "uri")?;
         let schema = schema_from_raw(schema)?;
@@ -329,9 +374,9 @@ pub extern "C" fn vortex_writer_open(
         let target = resolve_target(uri.as_str())?;
         ensure_create_target(&target)?;
 
-        let (sender, receiver) = channel::<RecordBatch>(8);
+        let (sender, receiver) = channel::<ArrayRef>(8);
         let worker_dtype = dtype.clone();
-        let worker = thread::spawn(move || write_batches(target, worker_dtype, receiver));
+        let worker = thread::spawn(move || write_batches(target, worker_dtype, config, receiver));
 
         Ok(Box::into_raw(Box::new(VortexWriterHandle::new(schema, sender, worker))))
     })();
@@ -376,7 +421,7 @@ pub extern "C" fn vortex_writer_push_batch(
         return handle.set_error("writer is already finished");
     }
 
-    let batch = match batch_from_raw(array, &handle.schema) {
+    let batch = match array_from_raw(array, &handle.schema) {
         Ok(batch) => batch,
         Err(err) => return handle.set_error(err),
     };

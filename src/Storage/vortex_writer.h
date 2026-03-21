@@ -12,6 +12,8 @@
 struct VortexWriterOptions final : IFormatWriterOptions
 {
     std::int64_t target_partition_rows = 0;
+    std::int64_t row_block_size = 8192;
+    std::int64_t output_buffer_bytes = 16 * 1024 * 1024;
 };
 
 class VortexOrderedWriter final : public IOrderedTableWriter
@@ -34,6 +36,7 @@ public:
 private:
     static std::string JoinPath(const std::string & base, const std::string & leaf);
     static arrow::Status ValidateNonNegative(std::int64_t value, const char * option_name);
+    static arrow::Status ValidatePositive(std::int64_t value, const char * option_name);
     static arrow::Status BridgeStatus(const VortexWriterHandle * handle, const char * fallback);
 
     arrow::Status PushRecordBatch(const std::shared_ptr<arrow::RecordBatch> & record_batch);

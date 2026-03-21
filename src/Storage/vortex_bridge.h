@@ -12,6 +12,8 @@ struct VortexWriterOptionsC
 {
     std::uint32_t abi_version;
     std::uint32_t reserved;
+    std::int64_t row_block_size;
+    std::int64_t output_buffer_bytes;
 };
 
 struct VortexFileInfoC
