@@ -1,51 +1,48 @@
 #pragma once
 
-#include "Storage/storage.h"
+#include "Storage/vortex_bridge.h"
 #include "Storage/writer.h"
 
-#include <arrow/record_batch.h>
+#include <arrow/result.h>
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #if defined(ENABLE_VORTEX)
 struct VortexWriterOptions final : IFormatWriterOptions
 {
-    std::int64_t max_partition_rows = 0;
+    std::int64_t target_partition_rows = 0;
 };
 
-/*
- * This implementation is intentionally minimal and is used as a very simple
- * PoC writer. It is expected to be reworked and extended
- *
- * TODO:
- * - Replace full in-memory buffering with streaming/chunked writing
- * - Add format-specific writer options
- * - Support multipart/partition-aware output strategy
- */
-class VortexTableWriter final : public ITableWriter
+class VortexOrderedWriter final : public IOrderedTableWriter
 {
 public:
     static const VortexWriterOptions & ResolveOptions(const WriterOptions & options);
-    static std::string BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition);
+    static std::string BuildFilePath(const OutputLocation & output, const std::string & table_name);
 
-    arrow::Status OpenPartition(
+    arrow::Status OpenTable(
         const TableMetadata & table,
         const OutputLocation & output,
         const WriterOptions & options,
-        const PartitionSpec & partition,
         arrow::MemoryPool * pool) override;
 
+    arrow::Status BeginInputPartition(const PartitionSpec & partition) override;
     arrow::Status WriteBatch(const TableBatch & batch) override;
-    arrow::Status ClosePartition() override;
+    arrow::Status EndInputPartition() override;
+    arrow::Status CloseTable() override;
 
 private:
+    static std::string JoinPath(const std::string & base, const std::string & leaf);
+    static arrow::Status ValidateNonNegative(std::int64_t value, const char * option_name);
+    static arrow::Status BridgeStatus(const VortexWriterHandle * handle, const char * fallback);
+
+    arrow::Status PushRecordBatch(const std::shared_ptr<arrow::RecordBatch> & record_batch);
+    void CloseHandle();
+
     const TableMetadata * table_ = nullptr;
-    std::string output_uri_;
-    FileSystemPtr fs_;
-    std::string file_path_;
-    std::vector<std::shared_ptr<arrow::RecordBatch>> batches_;
+    std::string file_uri_;
+    VortexWriterHandle * handle_ = nullptr;
     bool is_open_ = false;
+    bool wrote_non_empty_batch_ = false;
 };
 #endif
