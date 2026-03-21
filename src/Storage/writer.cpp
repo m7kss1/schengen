@@ -2,6 +2,9 @@
 
 #include "Common/partition.h"
 #include "Storage/orc_writer.h"
+#if defined(ENABLE_LANCE)
+#    include "Storage/lance_writer.h"
+#endif
 #include "Storage/parquet_writer.h"
 
 #if defined(ENABLE_VORTEX)
@@ -93,6 +96,13 @@ public:
         return options;
     }
 
+    bool SupportsStrategy(WriteStrategy strategy) const override
+    {
+        return strategy == WriteStrategy::ParallelPartitionFiles || strategy == WriteStrategy::SingleFileOrdered;
+    }
+
+    WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
         const auto & parquet_options = ParquetTableWriter::ResolveOptions(options);
@@ -101,6 +111,10 @@ public:
     }
 
     std::unique_ptr<ITableWriter> CreateWriter() const override { return std::make_unique<ParquetTableWriter>(); }
+    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override
+    {
+        return std::make_unique<ParquetOrderedWriter>();
+    }
 
 private:
     static std::string DefaultCompressionName()
@@ -200,6 +214,13 @@ public:
         return options;
     }
 
+    bool SupportsStrategy(WriteStrategy strategy) const override
+    {
+        return strategy == WriteStrategy::ParallelPartitionFiles || strategy == WriteStrategy::SingleFileOrdered;
+    }
+
+    WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
         const auto & orc_options = OrcTableWriter::ResolveOptions(options);
@@ -212,6 +233,7 @@ public:
     }
 
     std::unique_ptr<ITableWriter> CreateWriter() const override { return std::make_unique<OrcTableWriter>(); }
+    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override { return nullptr; }
 
 private:
     static std::string DefaultCompressionName()
@@ -271,6 +293,79 @@ private:
 };
 #endif
 
+#if defined(ENABLE_LANCE)
+class LanceFormatDriver final : public IFormatDriver
+{
+public:
+    std::string_view Name() const override { return "lance"; }
+    OutputFormat Format() const override { return OutputFormat::Lance; }
+
+    void RegisterCliOptions(po::options_description & desc) const override
+    {
+        const LanceWriterOptions defaults{};
+        desc.add_options()(
+            "lance-target-partition-rows",
+            po::value<std::int64_t>()->default_value(defaults.target_partition_rows),
+            "Generation partition rows for single-file Lance output (<=0 disables partition splitting)")(
+            "lance-max-rows-per-file",
+            po::value<std::int64_t>()->default_value(defaults.max_rows_per_file),
+            "Max Lance rows per data file (<=0 uses Lance defaults)")(
+            "lance-max-rows-per-group",
+            po::value<std::int64_t>()->default_value(defaults.max_rows_per_group),
+            "Max Lance rows per row group (<=0 uses Lance defaults)")(
+            "lance-max-bytes-per-file",
+            po::value<std::int64_t>()->default_value(defaults.max_bytes_per_file),
+            "Max Lance bytes per data file (<=0 uses Lance defaults)");
+    }
+
+    arrow::Result<WriterOptions> BuildWriterOptions(const po::variables_map & vm) const override
+    {
+        auto lance_options = std::make_shared<LanceWriterOptions>();
+        lance_options->target_partition_rows = vm["lance-target-partition-rows"].as<std::int64_t>();
+        lance_options->max_rows_per_file = vm["lance-max-rows-per-file"].as<std::int64_t>();
+        lance_options->max_rows_per_group = vm["lance-max-rows-per-group"].as<std::int64_t>();
+        lance_options->max_bytes_per_file = vm["lance-max-bytes-per-file"].as<std::int64_t>();
+
+        if (lance_options->target_partition_rows < 0)
+        {
+            return arrow::Status::Invalid("lance-target-partition-rows must be >= 0");
+        }
+        if (lance_options->max_rows_per_file < 0)
+        {
+            return arrow::Status::Invalid("lance-max-rows-per-file must be >= 0");
+        }
+        if (lance_options->max_rows_per_group < 0)
+        {
+            return arrow::Status::Invalid("lance-max-rows-per-group must be >= 0");
+        }
+        if (lance_options->max_bytes_per_file < 0)
+        {
+            return arrow::Status::Invalid("lance-max-bytes-per-file must be >= 0");
+        }
+
+        WriterOptions options;
+        options.format = OutputFormat::Lance;
+        options.format_options = lance_options;
+        return options;
+    }
+
+    bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::SingleFileOrdered; }
+    WriteStrategy PreferredStrategy() const override { return WriteStrategy::SingleFileOrdered; }
+
+    std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
+    {
+        const auto & lance_options = LanceOrderedWriter::ResolveOptions(options);
+        return ResolvePartCountByTargetRows(scale.RowCount(table), lance_options.target_partition_rows);
+    }
+
+    std::unique_ptr<ITableWriter> CreateWriter() const override { return nullptr; }
+    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override
+    {
+        return std::make_unique<LanceOrderedWriter>();
+    }
+};
+#endif
+
 #if defined(ENABLE_VORTEX)
 class VortexFormatDriver final : public IFormatDriver
 {
@@ -302,6 +397,9 @@ public:
         return options;
     }
 
+    bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::ParallelPartitionFiles; }
+    WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
         const auto & vortex_options = VortexTableWriter::ResolveOptions(options);
@@ -309,6 +407,7 @@ public:
     }
 
     std::unique_ptr<ITableWriter> CreateWriter() const override { return std::make_unique<VortexTableWriter>(); }
+    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override { return nullptr; }
 };
 #endif
 
@@ -323,6 +422,10 @@ const std::vector<const IFormatDriver *> & EnabledDrivers()
 #if defined(ARROW_ORC)
         static const OrcFormatDriver orc_driver;
         out.push_back(&orc_driver);
+#endif
+#if defined(ENABLE_LANCE)
+        static const LanceFormatDriver lance_driver;
+        out.push_back(&lance_driver);
 #endif
 #if defined(ENABLE_VORTEX)
         static const VortexFormatDriver vortex_driver;

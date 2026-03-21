@@ -15,7 +15,7 @@ option(ENABLE_FORMATS "Enable format-specific targets (storage + CLI)" ON)
 option(USE_SYSTEM_ARROW "Use system-installed Arrow" OFF)
 option(ENABLE_PARQUET "Enable Parquet format support" ON)
 option(ENABLE_ORC "Enable ORC format support" OFF)
-option(ENABLE_LANCE "Enable Lance format support (not implemented yet)" OFF)
+option(ENABLE_LANCE "Enable Lance format support" OFF)
 option(ENABLE_ICEBERG "Enable Iceberg format support (not implemented yet)" OFF)
 option(ENABLE_VORTEX "Enable Vortex format support" OFF)
 
@@ -27,7 +27,7 @@ if (NOT ENABLE_FORMATS)
   message(STATUS "ENABLE_FORMATS=OFF: output formats and CLI are disabled")
   set(ENABLE_PARQUET OFF CACHE BOOL "Enable Parquet format support" FORCE)
   set(ENABLE_ORC OFF CACHE BOOL "Enable ORC format support" FORCE)
-  set(ENABLE_LANCE OFF CACHE BOOL "Enable Lance format support (not implemented yet)" FORCE)
+  set(ENABLE_LANCE OFF CACHE BOOL "Enable Lance format support" FORCE)
   set(ENABLE_ICEBERG OFF CACHE BOOL "Enable Iceberg format support (not implemented yet)" FORCE)
   set(ENABLE_VORTEX OFF CACHE BOOL "Enable Vortex format support" FORCE)
 endif ()
@@ -39,11 +39,11 @@ endif ()
 if (ENABLE_VORTEX)
   list(APPEND SCHENGEN_ENABLED_FORMATS vortex)
 endif ()
+if (ENABLE_LANCE)
+  list(APPEND SCHENGEN_ENABLED_FORMATS lance)
+endif ()
 if (ENABLE_ORC)
   list(APPEND SCHENGEN_ENABLED_FORMATS orc)
-endif ()
-if (ENABLE_LANCE)
-  message(STATUS "ENABLE_LANCE=ON, but Lance support is not implemented yet; skipping")
 endif ()
 if (ENABLE_ICEBERG)
   message(STATUS "ENABLE_ICEBERG=ON, but Iceberg support is not implemented yet; skipping")
@@ -158,6 +158,9 @@ if (TARGET sch::arrow)
     if ("parquet" IN_LIST SCHENGEN_ENABLED_FORMATS AND NOT TARGET sch::parquet)
       message(FATAL_ERROR "Parquet format is enabled but target is unavailable")
     endif ()
+    if ("lance" IN_LIST SCHENGEN_ENABLED_FORMATS AND NOT TARGET sch::lance)
+      message(FATAL_ERROR "Lance format is enabled but target is unavailable")
+    endif ()
 
     set(SCHENGEN_STORAGE_SOURCES
         src/Storage/storage.cpp
@@ -165,6 +168,9 @@ if (TARGET sch::arrow)
         src/Storage/writer.cpp)
     if ("orc" IN_LIST SCHENGEN_ENABLED_FORMATS)
       list(APPEND SCHENGEN_STORAGE_SOURCES src/Storage/orc_writer.cpp)
+    endif ()
+    if (TARGET sch::lance)
+      list(APPEND SCHENGEN_STORAGE_SOURCES src/Storage/lance_writer.cpp)
     endif ()
     if (TARGET sch::vortex)
       list(APPEND SCHENGEN_STORAGE_SOURCES src/Storage/vortex_writer.cpp)
@@ -206,11 +212,45 @@ if (TARGET sch::arrow)
       target_compile_definitions(schengen_storage PRIVATE ENABLE_VORTEX=1)
       target_link_libraries(schengen_storage PRIVATE sch::vortex)
     endif ()
+    if (TARGET sch::lance)
+      target_compile_definitions(schengen_storage PRIVATE ENABLE_LANCE=1)
+      target_link_libraries(schengen_storage PRIVATE sch::lance)
+    endif ()
 
     if (TARGET sch::yaclib AND SCHENGEN_BUILD_FORMAT_TARGETS)
       find_package(Boost COMPONENTS program_options REQUIRED)
 
-      add_executable(schengen_main src/main.cpp src/Storage/write_scheduler.cpp)
+      add_library(schengen_scheduler STATIC src/Storage/write_scheduler.cpp)
+      target_compile_features(schengen_scheduler PRIVATE cxx_std_17)
+      target_include_directories(schengen_scheduler PRIVATE ${PROJECT_SOURCE_DIR}/src)
+      if (DEFINED ARROW_INCLUDE_DIRS)
+        target_include_directories(schengen_scheduler PRIVATE ${ARROW_INCLUDE_DIRS})
+      endif ()
+      if (DEFINED YACLIB_INCLUDE_DIRS)
+        target_include_directories(schengen_scheduler PRIVATE ${YACLIB_INCLUDE_DIRS})
+      endif ()
+
+      target_link_libraries(
+        schengen_scheduler
+        PUBLIC
+          schengen_core
+          schengen_storage
+          ${_existing_storage_arrow_priv_deps}
+          Boost::program_options
+          sch::arrow
+          sch::yaclib
+      )
+      if (TARGET sch::parquet)
+        target_link_libraries(schengen_scheduler PUBLIC sch::parquet)
+      endif ()
+      if (TARGET sch::vortex)
+        target_link_libraries(schengen_scheduler PUBLIC sch::vortex)
+      endif ()
+      if (TARGET sch::lance)
+        target_link_libraries(schengen_scheduler PUBLIC sch::lance)
+      endif ()
+
+      add_executable(schengen_main src/main.cpp)
       target_compile_features(schengen_main PRIVATE cxx_std_17)
       target_include_directories(schengen_main PRIVATE ${PROJECT_SOURCE_DIR}/src)
       if (DEFINED ARROW_INCLUDE_DIRS)
@@ -224,18 +264,8 @@ if (TARGET sch::arrow)
         schengen_main
         PRIVATE
           schengen_core
-          schengen_storage
-          ${_existing_storage_arrow_priv_deps}
-          Boost::program_options
-          sch::arrow
-          sch::yaclib
+          schengen_scheduler
       )
-      if (TARGET sch::parquet)
-        target_link_libraries(schengen_main PRIVATE sch::parquet)
-      endif ()
-      if (TARGET sch::vortex)
-        target_compile_definitions(schengen_main PRIVATE ENABLE_VORTEX=1)
-      endif ()
     else ()
       message(STATUS "YACLib is disabled; Skipping CLI target")
     endif ()

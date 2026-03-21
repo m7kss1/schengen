@@ -52,3 +52,59 @@ gtest_discover_tests(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   DISCOVERY_TIMEOUT 60
 )
+
+if (TARGET schengen_storage)
+  set(STORAGE_WRITER_TEST_SOURCES parquet_writer_test.cpp)
+  if (TARGET sch::lance)
+    list(APPEND STORAGE_WRITER_TEST_SOURCES lance_writer_test.cpp)
+  endif ()
+
+  add_executable(storage_writer_tests ${STORAGE_WRITER_TEST_SOURCES})
+  target_compile_features(storage_writer_tests PRIVATE cxx_std_17)
+  target_include_directories(
+    storage_writer_tests
+    PRIVATE
+      "${PROJECT_SOURCE_DIR}/src"
+      "${PROJECT_SOURCE_DIR}/src/Common"
+      "${PROJECT_SOURCE_DIR}/src/Tables"
+      "${PROJECT_SOURCE_DIR}/src/Storage"
+  )
+  if (DEFINED ARROW_INCLUDE_DIRS)
+    target_include_directories(storage_writer_tests PRIVATE ${ARROW_INCLUDE_DIRS})
+  endif ()
+  if (DEFINED YACLIB_INCLUDE_DIRS)
+    target_include_directories(storage_writer_tests PRIVATE ${YACLIB_INCLUDE_DIRS})
+  endif ()
+
+  target_link_libraries(
+    storage_writer_tests
+    PRIVATE
+      sch::gtest_main
+      schengen_core
+      schengen_storage
+  )
+  if (TARGET schengen_scheduler)
+    target_link_libraries(storage_writer_tests PRIVATE schengen_scheduler)
+  endif ()
+  if (TARGET sch::parquet)
+    target_link_libraries(storage_writer_tests PRIVATE sch::parquet)
+  endif ()
+  if (TARGET sch::lance)
+    target_compile_definitions(storage_writer_tests PRIVATE ENABLE_LANCE=1)
+    target_link_libraries(storage_writer_tests PRIVATE sch::lance)
+  endif ()
+  if (TARGET sch::arrow)
+    target_link_libraries(
+      storage_writer_tests
+      PRIVATE
+        sch::arrow
+        ${_existing_arrow_priv_deps}
+    )
+  endif ()
+
+  gtest_discover_tests(
+    storage_writer_tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    DISCOVERY_TIMEOUT 60
+  )
+endif ()
