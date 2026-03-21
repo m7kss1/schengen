@@ -25,8 +25,15 @@ enum class OutputFormat : uint8_t
 {
     Parquet,
     Orc,
+    Lance,
     Vortex,
-    /* TODO: Lance, Iceberg, Paimon */
+    /* TODO: Iceberg, Paimon */
+};
+
+enum class WriteStrategy : uint8_t
+{
+    ParallelPartitionFiles,
+    SingleFileOrdered,
 };
 
 struct OutputLocation
@@ -75,6 +82,24 @@ public:
     virtual arrow::Status ClosePartition() = 0;
 };
 
+class IOrderedTableWriter
+{
+public:
+    virtual ~IOrderedTableWriter() = default;
+
+    virtual arrow::Status OpenTable(
+        const TableMetadata & table,
+        const OutputLocation & output,
+        const WriterOptions & options,
+        arrow::MemoryPool * pool)
+        = 0;
+
+    virtual arrow::Status BeginInputPartition(const PartitionSpec & partition) = 0;
+    virtual arrow::Status WriteBatch(const TableBatch & batch) = 0;
+    virtual arrow::Status EndInputPartition() = 0;
+    virtual arrow::Status CloseTable() = 0;
+};
+
 class IFormatDriver
 {
 public:
@@ -84,10 +109,13 @@ public:
     virtual OutputFormat Format() const = 0;
     virtual void RegisterCliOptions(boost::program_options::options_description & desc) const = 0;
     virtual arrow::Result<WriterOptions> BuildWriterOptions(const boost::program_options::variables_map & vm) const = 0;
+    virtual bool SupportsStrategy(WriteStrategy strategy) const = 0;
+    virtual WriteStrategy PreferredStrategy() const = 0;
     virtual std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options)
         const
         = 0;
     virtual std::unique_ptr<ITableWriter> CreateWriter() const = 0;
+    virtual std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const = 0;
 };
 
 std::vector<std::string> SupportedFormatNames();

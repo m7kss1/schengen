@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace boost::program_options
 {
@@ -22,15 +23,9 @@ namespace yaclib
 class IExecutor;
 } // namespace yaclib
 
-enum class WriteStrategy : std::uint8_t
-{
-    ParallelPartitionFiles,
-    SingleFileOrdered,
-};
-
 struct WriteSchedulerOptions
 {
-    WriteStrategy strategy = WriteStrategy::ParallelPartitionFiles;
+    std::optional<WriteStrategy> strategy;
     std::uint32_t worker_count = 0;
     std::size_t queue_capacity = 8;
 };
@@ -46,6 +41,9 @@ struct GenerationContext
 
 void RegisterWriteSchedulerCliOptions(boost::program_options::options_description & desc);
 arrow::Result<WriteSchedulerOptions> BuildWriteSchedulerOptions(const boost::program_options::variables_map & vm);
+arrow::Result<WriteStrategy> ResolveSelectedWriteStrategy(
+    const WriteSchedulerOptions & options,
+    const IFormatDriver & format_driver);
 
 int GenerateTableWithStrategy(
     const GenerationContext & ctx,

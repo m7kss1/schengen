@@ -217,3 +217,162 @@ std::string ParquetTableWriter::JoinPath(const std::string & base, const std::st
     }
     return base + "/" + leaf;
 }
+
+arrow::Status ParquetOrderedWriter::OpenTable(
+    const TableMetadata & table,
+    const OutputLocation & output,
+    const WriterOptions & options,
+    arrow::MemoryPool * pool)
+{
+#if !defined(ARROW_PARQUET)
+    (void)table;
+    (void)output;
+    (void)options;
+    (void)pool;
+    return arrow::Status::NotImplemented("Arrow was built without Parquet support");
+#else
+    if (is_open_)
+    {
+        return arrow::Status::Invalid("ParquetOrderedWriter::OpenTable() called while table is already open");
+    }
+
+    table_ = &table;
+    pool_ = pool != nullptr ? pool : arrow::default_memory_pool();
+    options_ = ParquetTableWriter::ResolveOptions(options);
+
+    ARROW_ASSIGN_OR_RAISE(fs_, ParquetTableWriter::GetFilesystem(output.uri));
+    ARROW_ASSIGN_OR_RAISE(const std::string base_dir, ParquetTableWriter::GetPath(output.uri, *fs_));
+
+    const auto table_dir = ParquetTableWriter::JoinPath(base_dir, table.name);
+    RETURN_NOT_OK(fs_->CreateDir(table_dir, /*recursive=*/true));
+
+    final_path_ = ParquetTableWriter::JoinPath(table_dir, table.name + "-1.parquet");
+    temp_path_ = final_path_ + ".tmp";
+
+    ARROW_ASSIGN_OR_RAISE(const auto info, fs_->GetFileInfo(final_path_));
+    if (info.type() != arrow::fs::FileType::NotFound)
+    {
+        return arrow::Status::AlreadyExists(final_path_);
+    }
+
+    ARROW_ASSIGN_OR_RAISE(sink_, fs_->OpenOutputStream(temp_path_));
+    if (options_.output_buffer_bytes > 0)
+    {
+        ARROW_ASSIGN_OR_RAISE(
+            sink_,
+            arrow::io::BufferedOutputStream::Create(options_.output_buffer_bytes, pool_, std::move(sink_)));
+    }
+
+    auto props_builder = ::parquet::WriterProperties::Builder();
+    props_builder.compression(options_.compression);
+    const auto row_group_rows = ParquetTableWriter::ResolveRowGroupRows(*table_, options_);
+    if (row_group_rows > 0)
+    {
+        props_builder.max_row_group_length(row_group_rows);
+    }
+    auto props = props_builder.build();
+
+    auto arrow_props = ::parquet::ArrowWriterProperties::Builder().set_use_threads(options_.use_threads)->build();
+
+    ARROW_ASSIGN_OR_RAISE(
+        writer_, ::parquet::arrow::FileWriter::Open(*table.schema, pool_, sink_, std::move(props), std::move(arrow_props)));
+
+    is_open_ = true;
+    return arrow::Status::OK();
+#endif
+}
+
+arrow::Status ParquetOrderedWriter::BeginInputPartition(const PartitionSpec & partition)
+{
+#if !defined(ARROW_PARQUET)
+    (void)partition;
+    return arrow::Status::NotImplemented("Arrow was built without Parquet support");
+#else
+    if (!is_open_ || !writer_)
+    {
+        return arrow::Status::Invalid("ParquetOrderedWriter::BeginInputPartition() called before OpenTable()");
+    }
+    if (partition.part_num < 1 || partition.part_count < 1 || partition.part_num > partition.part_count)
+    {
+        return arrow::Status::Invalid("Invalid partition range");
+    }
+    if (partition_open_)
+    {
+        return arrow::Status::OK();
+    }
+
+    RETURN_NOT_OK(writer_->NewBufferedRowGroup());
+    partition_open_ = true;
+    return arrow::Status::OK();
+#endif
+}
+
+arrow::Status ParquetOrderedWriter::WriteBatch(const TableBatch & batch)
+{
+#if !defined(ARROW_PARQUET)
+    (void)batch;
+    return arrow::Status::NotImplemented("Arrow was built without Parquet support");
+#else
+    if (!is_open_ || !writer_ || table_ == nullptr)
+    {
+        return arrow::Status::Invalid("ParquetOrderedWriter::WriteBatch() called before OpenTable()");
+    }
+    if (batch.metadata == nullptr || batch.metadata != table_)
+    {
+        return arrow::Status::Invalid("TableBatch metadata mismatch");
+    }
+    if (batch.row_count == 0)
+    {
+        return arrow::Status::OK();
+    }
+    if (!partition_open_)
+    {
+        RETURN_NOT_OK(BeginInputPartition(PartitionSpec{}));
+    }
+
+    const auto row_count = static_cast<std::int64_t>(batch.row_count);
+    auto rb = arrow::RecordBatch::Make(table_->schema, row_count, batch.columns);
+    return writer_->WriteRecordBatch(*rb);
+#endif
+}
+
+arrow::Status ParquetOrderedWriter::EndInputPartition()
+{
+    partition_open_ = false;
+    return arrow::Status::OK();
+}
+
+arrow::Status ParquetOrderedWriter::CloseTable()
+{
+#if !defined(ARROW_PARQUET)
+    return arrow::Status::OK();
+#else
+    if (!is_open_)
+    {
+        return arrow::Status::OK();
+    }
+
+    RETURN_NOT_OK(writer_->Close());
+    writer_.reset();
+
+    if (sink_)
+    {
+        RETURN_NOT_OK(sink_->Close());
+        sink_.reset();
+    }
+
+    if (!temp_path_.empty() && !final_path_.empty())
+    {
+        RETURN_NOT_OK(fs_->Move(temp_path_, final_path_));
+    }
+
+    fs_.reset();
+    table_ = nullptr;
+    pool_ = nullptr;
+    temp_path_.clear();
+    final_path_.clear();
+    is_open_ = false;
+    partition_open_ = false;
+    return arrow::Status::OK();
+#endif
+}

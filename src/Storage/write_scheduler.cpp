@@ -2,8 +2,8 @@
 
 #include "Storage/orc_writer.h"
 #include "Storage/parquet_writer.h"
-
 #include <boost/program_options.hpp>
+#include <arrow/io/buffered.h>
 
 #include "yaclib/async/future.hpp"
 #include "yaclib/async/run.hpp"
@@ -20,8 +20,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include <arrow/io/buffered.h>
 
 namespace po = boost::program_options;
 
@@ -744,7 +742,6 @@ arrow::Result<std::unique_ptr<ISingleFileSink>> OpenSingleFileSink(
                 "single-file-ordered strategy is currently supported for parquet and orc formats");
     }
 }
-
 enum class BatchMessageKind : std::uint8_t
 {
     Batch,
@@ -770,14 +767,30 @@ int RunSingleFileOrdered(
     const WriteSchedulerOptions & scheduler_options,
     yaclib::IExecutor & part_executor)
 {
-    auto sink_result = OpenSingleFileSink(table, output, writer_options, ctx.pool);
-    if (!sink_result.ok())
+    auto writer = format_driver.CreateOrderedWriter();
+    std::unique_ptr<ISingleFileSink> sink;
+    const bool use_sink_fallback = writer == nullptr;
+
+    if (use_sink_fallback)
     {
-        std::cerr << "Failed to open single output file for table " << table.name << " (format " << format_driver.Name()
-                  << "): " << sink_result.status().ToString() << "\n";
-        return 2;
+        auto sink_result = OpenSingleFileSink(table, output, writer_options, ctx.pool);
+        if (!sink_result.ok())
+        {
+            std::cerr << "Failed to open single output file for table " << table.name << " (format " << format_driver.Name()
+                      << "): " << sink_result.status().ToString() << "\n";
+            return 2;
+        }
+        sink = std::move(sink_result).ValueOrDie();
     }
-    auto sink = std::move(sink_result).ValueOrDie();
+    else
+    {
+        const auto open_status = writer->OpenTable(table, output, writer_options, ctx.pool);
+        if (!open_status.ok())
+        {
+            std::cerr << "Failed to open ordered output for table " << table.name << ": " << open_status.ToString() << "\n";
+            return 2;
+        }
+    }
 
     detail::BoundedMpscQueue<BatchMessage> queue(scheduler_options.queue_capacity);
     yaclib_std::atomic<bool> stop_requested{false};
@@ -894,13 +907,28 @@ int RunSingleFileOrdered(
             {
                 if (!state.opened)
                 {
-                    RETURN_NOT_OK(sink->BeginPartition());
+                    if (use_sink_fallback)
+                    {
+                        RETURN_NOT_OK(sink->BeginPartition());
+                    }
+                    else
+                    {
+                        const PartitionSpec partition{.part_num = expected_part, .part_count = part_count};
+                        RETURN_NOT_OK(writer->BeginInputPartition(partition));
+                    }
                     state.opened = true;
                 }
 
                 while (!state.batches.empty())
                 {
-                    RETURN_NOT_OK(sink->WriteBatch(state.batches.front()));
+                    if (use_sink_fallback)
+                    {
+                        RETURN_NOT_OK(sink->WriteBatch(state.batches.front()));
+                    }
+                    else
+                    {
+                        RETURN_NOT_OK(writer->WriteBatch(state.batches.front()));
+                    }
                     state.batches.pop_front();
                 }
             }
@@ -912,7 +940,14 @@ int RunSingleFileOrdered(
 
             if (state.opened)
             {
-                RETURN_NOT_OK(sink->EndPartition());
+                if (use_sink_fallback)
+                {
+                    RETURN_NOT_OK(sink->EndPartition());
+                }
+                else
+                {
+                    RETURN_NOT_OK(writer->EndInputPartition());
+                }
             }
 
             states.erase(state_it);
@@ -985,7 +1020,7 @@ int RunSingleFileOrdered(
         pipeline_error = "Not all partitions were written to the output file";
     }
 
-    const auto close_status = sink->Close();
+    const auto close_status = use_sink_fallback ? sink->Close() : writer->CloseTable();
     if (!close_status.ok() && pipeline_error.empty())
     {
         pipeline_error = close_status.ToString();
@@ -1004,8 +1039,8 @@ void RegisterWriteSchedulerCliOptions(po::options_description & desc)
 {
     desc.add_options()(
         "write-strategy",
-        po::value<std::string>()->default_value("parallel-files"),
-        "Write strategy: parallel-files | single-file-ordered")(
+        po::value<std::string>()->default_value("auto"),
+        "Write strategy: auto | parallel-files | single-file-ordered")(
         "write-workers",
         po::value<std::uint32_t>()->default_value(0),
         "Worker count for partition processing (0 = auto)")(
@@ -1018,7 +1053,11 @@ arrow::Result<WriteSchedulerOptions> BuildWriteSchedulerOptions(const po::variab
 {
     WriteSchedulerOptions options;
     const auto strategy = ToLower(vm["write-strategy"].as<std::string>());
-    if (strategy == "parallel-files")
+    if (strategy == "auto")
+    {
+        options.strategy.reset();
+    }
+    else if (strategy == "parallel-files")
     {
         options.strategy = WriteStrategy::ParallelPartitionFiles;
     }
@@ -1040,6 +1079,22 @@ arrow::Result<WriteSchedulerOptions> BuildWriteSchedulerOptions(const po::variab
     return options;
 }
 
+arrow::Result<WriteStrategy> ResolveSelectedWriteStrategy(
+    const WriteSchedulerOptions & options,
+    const IFormatDriver & format_driver)
+{
+    const auto strategy = options.strategy.has_value() ? *options.strategy : format_driver.PreferredStrategy();
+    if (!format_driver.SupportsStrategy(strategy))
+    {
+        return arrow::Status::Invalid(
+            "Write strategy is not supported for format ",
+            std::string(format_driver.Name()),
+            ": ",
+            strategy == WriteStrategy::ParallelPartitionFiles ? "parallel-files" : "single-file-ordered");
+    }
+    return strategy;
+}
+
 int GenerateTableWithStrategy(
     const GenerationContext & ctx,
     const TableMetadata & table,
@@ -1056,7 +1111,15 @@ int GenerateTableWithStrategy(
         return 2;
     }
 
-    switch (scheduler_options.strategy)
+    auto selected_strategy_result = ResolveSelectedWriteStrategy(scheduler_options, format_driver);
+    if (!selected_strategy_result.ok())
+    {
+        std::cerr << selected_strategy_result.status().ToString() << "\n";
+        return 2;
+    }
+    const auto strategy = std::move(selected_strategy_result).ValueOrDie();
+
+    switch (strategy)
     {
         case WriteStrategy::ParallelPartitionFiles:
             return RunParallelPartitionFiles(

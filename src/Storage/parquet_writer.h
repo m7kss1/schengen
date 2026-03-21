@@ -48,6 +48,7 @@ public:
     static const ParquetWriterOptions & ResolveOptions(const WriterOptions & options);
     static arrow::Result<std::string> GetPath(std::string_view uri, const arrow::fs::FileSystem & fs);
     static std::string BuildPartitionFileName(const std::string & table_name, const PartitionSpec & partition);
+    static std::string JoinPath(const std::string & base, const std::string & leaf);
 
     arrow::Status OpenPartition(
         const TableMetadata & table,
@@ -59,13 +60,40 @@ public:
     arrow::Status WriteBatch(const TableBatch & batch) override;
     arrow::Status ClosePartition() override;
 
-private:
-    static std::string JoinPath(const std::string & base, const std::string & leaf);
-
     const TableMetadata * table_ = nullptr;
     arrow::MemoryPool * pool_ = nullptr;
     ParquetWriterOptions options_{};
     bool is_open_ = false;
+
+#if defined(ARROW_PARQUET)
+    FileSystemPtr fs_;
+    std::string temp_path_;
+    std::string final_path_;
+    std::shared_ptr<arrow::io::OutputStream> sink_;
+    std::unique_ptr<::parquet::arrow::FileWriter> writer_;
+#endif
+};
+
+class ParquetOrderedWriter final : public IOrderedTableWriter
+{
+public:
+    arrow::Status OpenTable(
+        const TableMetadata & table,
+        const OutputLocation & output,
+        const WriterOptions & options,
+        arrow::MemoryPool * pool) override;
+
+    arrow::Status BeginInputPartition(const PartitionSpec & partition) override;
+    arrow::Status WriteBatch(const TableBatch & batch) override;
+    arrow::Status EndInputPartition() override;
+    arrow::Status CloseTable() override;
+
+private:
+    const TableMetadata * table_ = nullptr;
+    arrow::MemoryPool * pool_ = nullptr;
+    ParquetWriterOptions options_{};
+    bool is_open_ = false;
+    bool partition_open_ = false;
 
 #if defined(ARROW_PARQUET)
     FileSystemPtr fs_;
