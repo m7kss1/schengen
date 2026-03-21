@@ -377,18 +377,32 @@ public:
     {
         const VortexWriterOptions defaults{};
         desc.add_options()(
+            "vortex-target-partition-rows",
+            po::value<std::int64_t>()->default_value(defaults.target_partition_rows),
+            "Generation partition rows for single-file Vortex output (<=0 disables partition splitting)")(
             "vortex-max-partition-rows",
-            po::value<std::int64_t>()->default_value(defaults.max_partition_rows),
-            "Max rows per output Vortex partition file (<=0 disables partition splitting)");
+            po::value<std::int64_t>()->default_value(defaults.target_partition_rows),
+            "Deprecated alias for vortex-target-partition-rows");
     }
 
     arrow::Result<WriterOptions> BuildWriterOptions(const po::variables_map & vm) const override
     {
         auto vortex_options = std::make_shared<VortexWriterOptions>();
-        vortex_options->max_partition_rows = vm["vortex-max-partition-rows"].as<std::int64_t>();
-        if (vortex_options->max_partition_rows < 0)
+        const auto primary_rows = vm["vortex-target-partition-rows"].as<std::int64_t>();
+        const auto legacy_rows = vm["vortex-max-partition-rows"].as<std::int64_t>();
+        const bool primary_explicit = !vm["vortex-target-partition-rows"].defaulted();
+        const bool legacy_explicit = !vm["vortex-max-partition-rows"].defaulted();
+
+        if (primary_explicit && legacy_explicit && primary_rows != legacy_rows)
         {
-            return arrow::Status::Invalid("vortex-max-partition-rows must be >= 0");
+            return arrow::Status::Invalid(
+                "vortex-target-partition-rows and vortex-max-partition-rows must match when both are specified");
+        }
+
+        vortex_options->target_partition_rows = primary_explicit ? primary_rows : legacy_rows;
+        if (vortex_options->target_partition_rows < 0)
+        {
+            return arrow::Status::Invalid("vortex-target-partition-rows must be >= 0");
         }
 
         WriterOptions options;
@@ -397,17 +411,20 @@ public:
         return options;
     }
 
-    bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::ParallelPartitionFiles; }
-    WriteStrategy PreferredStrategy() const override { return WriteStrategy::ParallelPartitionFiles; }
+    bool SupportsStrategy(WriteStrategy strategy) const override { return strategy == WriteStrategy::SingleFileOrdered; }
+    WriteStrategy PreferredStrategy() const override { return WriteStrategy::SingleFileOrdered; }
 
     std::int32_t ResolvePartCount(const TableMetadata & table, const ScaleConfig & scale, const WriterOptions & options) const override
     {
-        const auto & vortex_options = VortexTableWriter::ResolveOptions(options);
-        return ResolvePartCountByTargetRows(scale.RowCount(table), vortex_options.max_partition_rows);
+        const auto & vortex_options = VortexOrderedWriter::ResolveOptions(options);
+        return ResolvePartCountByTargetRows(scale.RowCount(table), vortex_options.target_partition_rows);
     }
 
-    std::unique_ptr<ITableWriter> CreateWriter() const override { return std::make_unique<VortexTableWriter>(); }
-    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override { return nullptr; }
+    std::unique_ptr<ITableWriter> CreateWriter() const override { return nullptr; }
+    std::unique_ptr<IOrderedTableWriter> CreateOrderedWriter() const override
+    {
+        return std::make_unique<VortexOrderedWriter>();
+    }
 };
 #endif
 

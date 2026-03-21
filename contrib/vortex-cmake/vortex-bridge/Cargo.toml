@@ -1,0 +1,17 @@
+[package]
+name = "vortex_bridge"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+arrow-array = "57.1"
+arrow-schema = "57.1"
+async-fs = "2.2.0"
+futures = "0.3.31"
+object_store = { version = "0.12.4", default-features = false, features = ["aws", "azure", "gcp"] }
+url = "2.5.7"
+vortex = { path = "../../vortex/vortex", features = ["object_store"] }
