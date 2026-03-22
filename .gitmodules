@@ -34,3 +34,6 @@
 [submodule "contrib/corrosion"]
 	path = contrib/corrosion
 	url = git@github.com:corrosion-rs/corrosion.git
+[submodule "contrib/ratatui"]
+	path = contrib/ratatui
+	url = git@github.com:ratatui/ratatui.git
