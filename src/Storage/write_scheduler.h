@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Storage/writer.h"
+#include "Storage/progress.h"
 
 #include "Common/partition.h"
 #include "Common/rands.h"
@@ -11,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace boost::program_options
 {
@@ -37,6 +39,8 @@ struct GenerationContext
     const ScaleConfig * scale = nullptr;
     arrow::MemoryPool * pool = nullptr;
     std::uint64_t batch_rows = 0;
+    std::string_view format_name;
+    IProgressSink * progress = nullptr;
 };
 
 void RegisterWriteSchedulerCliOptions(boost::program_options::options_description & desc);

@@ -55,6 +55,9 @@ gtest_discover_tests(
 
 if (TARGET schengen_storage)
   set(STORAGE_WRITER_TEST_SOURCES parquet_writer_test.cpp)
+  if (TARGET schengen_scheduler)
+    list(APPEND STORAGE_WRITER_TEST_SOURCES progress_test.cpp)
+  endif ()
   if (TARGET sch::lance)
     list(APPEND STORAGE_WRITER_TEST_SOURCES lance_writer_test.cpp)
   endif ()

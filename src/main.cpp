@@ -1,4 +1,5 @@
 #include "Common/registry.h"
+#include "Storage/progress.h"
 #include "Storage/write_scheduler.h"
 #include "Storage/writer.h"
 #include "Tables/register_tables.h"
@@ -97,6 +98,7 @@ int main(int argc, char ** argv)
     std::string output_path = ".";
     std::vector<std::string> tables;
     std::uint64_t batch_rows = 128 * 1024;
+    bool progress_json = false;
 
     const std::string supported_formats_text = JoinStrings(supported_formats, ", ");
     const std::string output_format_help = supported_formats.empty()
@@ -111,7 +113,8 @@ int main(int argc, char ** argv)
         output_format_help.c_str())(
         "output-path", po::value<std::string>(&output_path)->default_value("."), "Set output directory path")(
         "table", po::value<std::vector<std::string>>(&tables)->multitoken(), "Specify tables to generate")(
-        "batch-rows", po::value<std::uint64_t>(&batch_rows)->default_value(128 * 1024), "Control rows per batch count");
+        "batch-rows", po::value<std::uint64_t>(&batch_rows)->default_value(128 * 1024), "Control rows per batch count")(
+        "progress-json", po::bool_switch(&progress_json), "Emit machine-readable progress events to stdout as NDJSON");
     RegisterFormatCliOptions(desc);
     RegisterWriteSchedulerCliOptions(desc);
 
@@ -192,11 +195,14 @@ int main(int argc, char ** argv)
 
     const ScaleConfig scale{.factor = scale_factor};
     const OutputLocation output{.uri = output_path};
+    const std::string resolved_format_name(format_driver->Name());
 
     arrow::MemoryPool * pool = arrow::default_memory_pool();
     static const TextPool & text_pool = TextPool::Default();
     auto table_executor = yaclib::MakeFairThreadPool();
     auto part_executor = yaclib::MakeFairThreadPool();
+    JsonProgressSink json_progress_sink(std::cout);
+    IProgressSink * progress_sink = progress_json ? static_cast<IProgressSink *>(&json_progress_sink) : nullptr;
 
     GenerationContext ctx{
         .registry = &registry,
@@ -204,16 +210,39 @@ int main(int argc, char ** argv)
         .scale = &scale,
         .pool = pool,
         .batch_rows = batch_rows,
+        .format_name = resolved_format_name,
+        .progress = progress_sink,
     };
 
+    if (progress_sink != nullptr)
+    {
+        progress_sink->RunStarted(RunStartedEvent{
+            .selected_formats = {resolved_format_name},
+            .scale_factor = scale_factor,
+            .output_path = output_path,
+        });
+        progress_sink->FormatStarted(FormatStartedEvent{
+            .format = resolved_format_name,
+            .index = 1,
+            .total_formats = 1,
+        });
+    }
+
     std::vector<yaclib::FutureOn<int>> table_futures;
+    std::vector<std::string> table_task_names;
     table_futures.reserve(tables.size());
+    table_task_names.reserve(tables.size());
     for (const auto & table_name : tables)
     {
         const auto * metadata = registry.FindMetadata(table_name);
         if (!metadata)
         {
             std::cerr << "Unknown table: " << table_name << "\n";
+            if (progress_sink != nullptr)
+            {
+                progress_sink->FormatFinished(FormatFinishedEvent{.format = resolved_format_name, .success = false});
+                progress_sink->RunFinished(RunFinishedEvent{.success = false});
+            }
             table_executor->SoftStop();
             table_executor->Wait();
             part_executor->SoftStop();
@@ -223,12 +252,13 @@ int main(int argc, char ** argv)
 
         table_futures.emplace_back(LaunchTableTask(
             *table_executor, ctx, *metadata, output, writer_options, format_driver, scheduler_options, *part_executor));
+        table_task_names.emplace_back(table_name);
     }
 
     int exit_code = 0;
-    for (auto & future : table_futures)
+    for (std::size_t i = 0; i < table_futures.size(); ++i)
     {
-        auto result = std::move(future).Get();
+        auto result = std::move(table_futures[i]).Get();
         try
         {
             const int code = std::move(result).Ok();
@@ -240,6 +270,14 @@ int main(int argc, char ** argv)
         catch (const std::exception & ex)
         {
             std::cerr << "Table task failed: " << ex.what() << "\n";
+            if (progress_sink != nullptr)
+            {
+                progress_sink->TableFailed(TableFailedEvent{
+                    .format = resolved_format_name,
+                    .table = table_task_names[i],
+                    .error = ex.what(),
+                });
+            }
             exit_code = 2;
         }
     }
@@ -249,6 +287,12 @@ int main(int argc, char ** argv)
     part_executor->SoftStop();
     part_executor->Wait();
 
+    if (progress_sink != nullptr)
+    {
+        const bool success = exit_code == 0;
+        progress_sink->FormatFinished(FormatFinishedEvent{.format = resolved_format_name, .success = success});
+        progress_sink->RunFinished(RunFinishedEvent{.success = success});
+    }
+
     return exit_code;
 }
-
