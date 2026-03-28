@@ -21,20 +21,14 @@ std::string ToLower(std::string value)
     return value;
 }
 
-char SpinnerChar(std::size_t frame)
-{
-    static constexpr char kSpinnerChars[] = {'/', '-', '|', '\\'};
-    return kSpinnerChars[frame % (sizeof(kSpinnerChars) / sizeof(kSpinnerChars[0]))];
-}
-
-std::string StatusGlyph(TableProgressStatus status, char running_spinner)
+std::string StatusGlyph(TableProgressStatus status)
 {
     switch (status)
     {
         case TableProgressStatus::Pending:
             return " ";
         case TableProgressStatus::Running:
-            return std::string(1, running_spinner);
+            return " ";
         case TableProgressStatus::Done:
             return "\xE2\x9C\x93";
         case TableProgressStatus::Failed:
@@ -144,7 +138,7 @@ std::string_view ToString(CliVerbosity verbosity)
     return "quiet";
 }
 
-std::string FormatTableProgressLine(const TableProgressState & state, std::size_t bar_width, char running_spinner)
+std::string FormatTableProgressLine(const TableProgressState & state, std::size_t bar_width)
 {
     const auto percent = ApproxPercent(state);
     const auto filled = bar_width == 0 ? 0 : static_cast<std::size_t>((percent * bar_width) / 100);
@@ -152,7 +146,7 @@ std::string FormatTableProgressLine(const TableProgressState & state, std::size_
         state.status == TableProgressStatus::Done ? std::to_string(percent) + "%" : "~" + std::to_string(percent) + "%";
 
     std::ostringstream out;
-    out << '[' << StatusGlyph(state.status, running_spinner) << "] " << state.table_name << ' ';
+    out << '[' << StatusGlyph(state.status) << "] " << state.table_name << ' ';
     out << std::setw(4) << progress_label << " [";
     out << std::string(filled, '#');
     out << std::string(bar_width - filled, '-');
@@ -203,11 +197,11 @@ CliProgressController::CliProgressController(
     if (interactive_tty_ && !tables_.empty())
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<yaclib_std::mutex> lock(mutex_);
             render_dirty_ = true;
             RenderFrameLocked();
         }
-        render_thread_ = std::thread(&CliProgressController::RenderLoop, this);
+        render_thread_ = yaclib_std::thread(&CliProgressController::RenderLoop, this);
     }
 }
 
@@ -278,16 +272,11 @@ void CliProgressController::MaybeEmitAppendOnly(TableEntry & entry, bool force)
         return;
     }
 
-    const auto spinner = SpinnerChar(spinner_frame_);
-    (*stream_) << FormatTableProgressLine(entry.state, /*bar_width=*/20, spinner) << '\n';
+    (*stream_) << FormatTableProgressLine(entry.state) << '\n';
     stream_->flush();
     entry.last_emit_at = now;
     entry.last_emitted_percent = percent;
     entry.has_emitted = true;
-    if (entry.state.status == TableProgressStatus::Running)
-    {
-        ++spinner_frame_;
-    }
 }
 
 void CliProgressController::WriteFailureMessage(const std::string & message)
@@ -320,22 +309,15 @@ void CliProgressController::RenderFrameLocked()
         (*stream_) << "\x1b[" << rendered_lines_ << 'A';
     }
 
-    const auto spinner = SpinnerChar(spinner_frame_);
-    bool has_running_tables = false;
     for (const auto & entry : tables_)
     {
-        (*stream_) << "\r\x1b[2K" << FormatTableProgressLine(entry.state, /*bar_width=*/20, spinner) << '\n';
-        has_running_tables = has_running_tables || entry.state.status == TableProgressStatus::Running;
+        (*stream_) << "\r\x1b[2K" << FormatTableProgressLine(entry.state) << '\n';
     }
     stream_->flush();
 
     rendered_lines_ = tables_.size();
     frame_drawn_ = true;
     render_dirty_ = false;
-    if (has_running_tables)
-    {
-        ++spinner_frame_;
-    }
 }
 
 void CliProgressController::ClearFrameLocked(bool return_to_frame_start)
@@ -359,18 +341,15 @@ void CliProgressController::ClearFrameLocked(bool return_to_frame_start)
 
 void CliProgressController::RenderLoop()
 {
-    std::unique_lock<std::mutex> lock(mutex_);
+    std::unique_lock<yaclib_std::mutex> lock(mutex_);
     while (!stop_requested_)
     {
-        render_cv_.wait_for(lock, options_.tty_refresh_interval, [this]() { return stop_requested_ || render_dirty_; });
+        render_cv_.wait(lock, [this]() { return stop_requested_ || render_dirty_; });
         if (stop_requested_)
         {
             break;
         }
-        const bool has_running_tables = std::any_of(tables_.begin(), tables_.end(), [](const TableEntry & entry) {
-            return entry.state.status == TableProgressStatus::Running;
-        });
-        if (render_dirty_ || has_running_tables)
+        if (render_dirty_)
         {
             RenderFrameLocked();
         }
@@ -379,7 +358,7 @@ void CliProgressController::RenderLoop()
 
 void CliProgressController::MarkTableStarted(std::size_t table_index, std::int32_t part_count)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     auto * entry = LookupEntry(table_index);
     if (entry == nullptr || entry->state.status == TableProgressStatus::Failed)
     {
@@ -400,7 +379,7 @@ void CliProgressController::AddCommittedRows(std::size_t table_index, std::uint6
         return;
     }
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     auto * entry = LookupEntry(table_index);
     if (entry == nullptr || entry->state.status == TableProgressStatus::Failed || entry->state.status == TableProgressStatus::Done)
     {
@@ -423,7 +402,7 @@ void CliProgressController::AddCommittedRows(std::size_t table_index, std::uint6
 
 void CliProgressController::MarkPartCompleted(std::size_t table_index)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     auto * entry = LookupEntry(table_index);
     if (entry == nullptr || entry->state.status == TableProgressStatus::Failed || entry->state.status == TableProgressStatus::Done)
     {
@@ -443,7 +422,7 @@ void CliProgressController::MarkPartCompleted(std::size_t table_index)
 
 void CliProgressController::MarkTableFinished(std::size_t table_index)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     auto * entry = LookupEntry(table_index);
     if (entry == nullptr || entry->state.status == TableProgressStatus::Failed)
     {
@@ -462,7 +441,7 @@ void CliProgressController::MarkTableFinished(std::size_t table_index)
 
 void CliProgressController::ReportFailure(std::size_t table_index, std::string message)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     auto * entry = LookupEntry(table_index);
     if (entry != nullptr)
     {
@@ -477,7 +456,7 @@ void CliProgressController::ReportFailure(std::size_t table_index, std::string m
 
 auto CliProgressController::Snapshot() const -> std::vector<TableProgressState>
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<yaclib_std::mutex> lock(mutex_);
     std::vector<TableProgressState> snapshot;
     snapshot.reserve(tables_.size());
     for (const auto & entry : tables_)
@@ -490,7 +469,7 @@ auto CliProgressController::Snapshot() const -> std::vector<TableProgressState>
 void CliProgressController::Stop()
 {
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<yaclib_std::mutex> lock(mutex_);
         if (stop_requested_)
         {
             return;
@@ -506,7 +485,7 @@ void CliProgressController::Stop()
 
     if (interactive_tty_)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<yaclib_std::mutex> lock(mutex_);
         render_dirty_ = true;
         RenderFrameLocked();
     }

@@ -3,16 +3,16 @@
 #include <arrow/result.h>
 
 #include <chrono>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iosfwd>
-#include <mutex>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
+#include <yaclib_std/condition_variable>
+#include <yaclib_std/mutex>
+#include <yaclib_std/thread>
 
 namespace boost::program_options
 {
@@ -69,10 +69,7 @@ struct CliProgressControllerOptions
     std::function<void(const TableProgressState &)> state_observer;
 };
 
-std::string FormatTableProgressLine(
-    const TableProgressState & state,
-    std::size_t bar_width = 20,
-    char running_spinner = '|');
+std::string FormatTableProgressLine(const TableProgressState & state, std::size_t bar_width = 20);
 
 class CliProgressController final
 {
@@ -110,8 +107,8 @@ private:
     void ClearFrameLocked(bool return_to_frame_start);
     void RenderLoop();
 
-    mutable std::mutex mutex_;
-    std::condition_variable render_cv_;
+    mutable yaclib_std::mutex mutex_;
+    yaclib_std::condition_variable render_cv_;
     std::vector<TableEntry> tables_;
     CliProgressControllerOptions options_;
     std::ostream * stream_ = nullptr;
@@ -121,6 +118,5 @@ private:
     bool stop_requested_ = false;
     bool frame_drawn_ = false;
     std::size_t rendered_lines_ = 0;
-    std::size_t spinner_frame_ = 0;
-    std::thread render_thread_;
+    yaclib_std::thread render_thread_;
 };
