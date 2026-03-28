@@ -1,5 +1,6 @@
 #include "Storage/write_scheduler.h"
 
+#include "Storage/progress.h"
 #include "Storage/orc_writer.h"
 #include "Storage/parquet_writer.h"
 #include <boost/program_options.hpp>
@@ -16,6 +17,7 @@
 #include <deque>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -40,6 +42,53 @@ std::uint32_t ResolveWorkerCount(std::uint32_t configured, std::int32_t part_cou
         return max_workers;
     }
     return std::min(configured, max_workers);
+}
+
+bool HasProgress(const GenerationContext & ctx)
+{
+    return ctx.progress != nullptr && ctx.progress_table_index != std::numeric_limits<std::size_t>::max();
+}
+
+void MarkTableStarted(const GenerationContext & ctx, std::int32_t part_count)
+{
+    if (HasProgress(ctx))
+    {
+        ctx.progress->MarkTableStarted(ctx.progress_table_index, part_count);
+    }
+}
+
+void AddCommittedRows(const GenerationContext & ctx, std::uint64_t rows)
+{
+    if (HasProgress(ctx))
+    {
+        ctx.progress->AddCommittedRows(ctx.progress_table_index, rows);
+    }
+}
+
+void MarkPartCompleted(const GenerationContext & ctx)
+{
+    if (HasProgress(ctx))
+    {
+        ctx.progress->MarkPartCompleted(ctx.progress_table_index);
+    }
+}
+
+void MarkTableFinished(const GenerationContext & ctx)
+{
+    if (HasProgress(ctx))
+    {
+        ctx.progress->MarkTableFinished(ctx.progress_table_index);
+    }
+}
+
+void ReportError(const GenerationContext & ctx, std::string message)
+{
+    if (HasProgress(ctx))
+    {
+        ctx.progress->ReportFailure(ctx.progress_table_index, std::move(message));
+        return;
+    }
+    std::cerr << message << "\n";
 }
 
 namespace detail
@@ -259,14 +308,14 @@ int GeneratePartitionToOwnFile(
         auto generator = ctx.registry->CreateGenerator(table.name, ctx.pool);
         if (!generator)
         {
-            std::cerr << "Failed to create generator for table: " << table.name << "\n";
+            ReportError(ctx, "Failed to create generator for table: " + table.name);
             return 2;
         }
 
         writer = format_driver.CreateWriter();
         if (!writer)
         {
-            std::cerr << "Writer is not available for format: " << format_driver.Name() << "\n";
+            ReportError(ctx, "Writer is not available for format: " + std::string(format_driver.Name()));
             return 2;
         }
 
@@ -274,8 +323,10 @@ int GeneratePartitionToOwnFile(
         const auto open_status = writer->OpenPartition(table, output, writer_options, partition, ctx.pool);
         if (!open_status.ok())
         {
-            std::cerr << "Failed to open partition " << part << "/" << part_count << " for table " << table.name << ": "
-                      << open_status.ToString() << "\n";
+            std::ostringstream message;
+            message << "Failed to open partition " << part << "/" << part_count << " for table " << table.name << ": "
+                    << open_status.ToString();
+            ReportError(ctx, message.str());
             return 2;
         }
         partition_open = true;
@@ -293,36 +344,46 @@ int GeneratePartitionToOwnFile(
             const auto write_status = writer->WriteBatch(batch);
             if (!write_status.ok())
             {
-                std::cerr << "Failed to write partition " << part << "/" << part_count << " for table " << table.name << ": "
-                          << write_status.ToString() << "\n";
+                std::ostringstream message;
+                message << "Failed to write partition " << part << "/" << part_count << " for table " << table.name << ": "
+                        << write_status.ToString();
+                ReportError(ctx, message.str());
                 const auto cleanup_status = writer->ClosePartition();
                 partition_open = false;
                 if (!cleanup_status.ok())
                 {
-                    std::cerr << "Partition cleanup failed for table " << table.name << ": " << cleanup_status.ToString() << "\n";
+                    ReportError(ctx, "Partition cleanup failed for table " + table.name + ": " + cleanup_status.ToString());
                 }
                 return 2;
             }
+            AddCommittedRows(ctx, batch.row_count);
         }
 
         const auto close_status = writer->ClosePartition();
         partition_open = false;
         if (!close_status.ok())
         {
-            std::cerr << "Failed to close partition " << part << "/" << part_count << " for table " << table.name << ": "
-                      << close_status.ToString() << "\n";
+            std::ostringstream message;
+            message << "Failed to close partition " << part << "/" << part_count << " for table " << table.name << ": "
+                    << close_status.ToString();
+            ReportError(ctx, message.str());
             return 2;
         }
+        MarkPartCompleted(ctx);
         return 0;
     }
     catch (const std::exception & ex)
     {
-        std::cerr << "Partition " << part << "/" << part_count << " failed for table " << table.name << ": " << ex.what() << "\n";
+        std::ostringstream message;
+        message << "Partition " << part << "/" << part_count << " failed for table " << table.name << ": " << ex.what();
+        ReportError(ctx, message.str());
     }
     catch (...)
     {
-        std::cerr << "Partition " << part << "/" << part_count << " failed for table " << table.name
-                  << ": unknown error during generation\n";
+        std::ostringstream message;
+        message << "Partition " << part << "/" << part_count << " failed for table " << table.name
+                << ": unknown error during generation";
+        ReportError(ctx, message.str());
     }
 
     if (partition_open && writer)
@@ -330,7 +391,7 @@ int GeneratePartitionToOwnFile(
         const auto cleanup_status = writer->ClosePartition();
         if (!cleanup_status.ok())
         {
-            std::cerr << "Partition cleanup failed for table " << table.name << ": " << cleanup_status.ToString() << "\n";
+            ReportError(ctx, "Partition cleanup failed for table " + table.name + ": " + cleanup_status.ToString());
         }
     }
     return 2;
@@ -776,8 +837,10 @@ int RunNativeMultiplexedOrdered(
         auto sink_result = OpenSingleFileSink(table, output, writer_options, ctx.pool);
         if (!sink_result.ok())
         {
-            std::cerr << "Failed to open single output file for table " << table.name << " (format " << format_driver.Name()
-                      << "): " << sink_result.status().ToString() << "\n";
+            std::ostringstream message;
+            message << "Failed to open single output file for table " << table.name << " (format " << format_driver.Name()
+                    << "): " << sink_result.status().ToString();
+            ReportError(ctx, message.str());
             return 2;
         }
         sink = std::move(sink_result).ValueOrDie();
@@ -787,7 +850,7 @@ int RunNativeMultiplexedOrdered(
         const auto open_status = writer->OpenTable(table, output, writer_options, ctx.pool);
         if (!open_status.ok())
         {
-            std::cerr << "Failed to open ordered output for table " << table.name << ": " << open_status.ToString() << "\n";
+            ReportError(ctx, "Failed to open ordered output for table " + table.name + ": " + open_status.ToString());
             return 2;
         }
     }
@@ -921,6 +984,7 @@ int RunNativeMultiplexedOrdered(
 
                 while (!state.batches.empty())
                 {
+                    const auto row_count = state.batches.front().row_count;
                     if (use_sink_fallback)
                     {
                         RETURN_NOT_OK(sink->WriteBatch(state.batches.front()));
@@ -930,6 +994,7 @@ int RunNativeMultiplexedOrdered(
                         RETURN_NOT_OK(writer->WriteBatch(state.batches.front()));
                     }
                     state.batches.pop_front();
+                    AddCommittedRows(ctx, row_count);
                 }
             }
 
@@ -950,6 +1015,7 @@ int RunNativeMultiplexedOrdered(
                 }
             }
 
+            MarkPartCompleted(ctx);
             states.erase(state_it);
             ++expected_part;
         }
@@ -1028,7 +1094,7 @@ int RunNativeMultiplexedOrdered(
 
     if (!pipeline_error.empty())
     {
-        std::cerr << "single-file-ordered write failed for table " << table.name << ": " << pipeline_error << "\n";
+        ReportError(ctx, "single-file-ordered write failed for table " + table.name + ": " + pipeline_error);
         return 2;
     }
     return 0;
@@ -1050,7 +1116,7 @@ int RunForeignStreamingOrdered(
     auto writer = format_driver.CreateOrderedWriter();
     if (writer == nullptr)
     {
-        std::cerr << "Ordered writer is not available for format " << format_driver.Name() << "\n";
+        ReportError(ctx, "Ordered writer is not available for format " + std::string(format_driver.Name()));
         return 2;
     }
 
@@ -1067,12 +1133,11 @@ int RunForeignStreamingOrdered(
     };
 
     auto fail = [&](const std::string & message) -> int {
-        std::cerr << "single-file-ordered write failed for table " << table.name << ": " << message << "\n";
+        ReportError(ctx, "single-file-ordered write failed for table " + table.name + ": " + message);
         const auto close_status = close_writer();
         if (!close_status.ok())
         {
-            std::cerr << "single-file-ordered cleanup failed for table " << table.name << ": " << close_status.ToString()
-                      << "\n";
+            ReportError(ctx, "single-file-ordered cleanup failed for table " + table.name + ": " + close_status.ToString());
         }
         return 2;
     };
@@ -1082,7 +1147,7 @@ int RunForeignStreamingOrdered(
         const auto open_status = writer->OpenTable(table, output, writer_options, ctx.pool);
         if (!open_status.ok())
         {
-            std::cerr << "Failed to open ordered output for table " << table.name << ": " << open_status.ToString() << "\n";
+            ReportError(ctx, "Failed to open ordered output for table " + table.name + ": " + open_status.ToString());
             return 2;
         }
         table_open = true;
@@ -1117,6 +1182,7 @@ int RunForeignStreamingOrdered(
                 {
                     return fail(write_status.ToString());
                 }
+                AddCommittedRows(ctx, batch.row_count);
             }
 
             const auto end_status = writer->EndInputPartition();
@@ -1124,6 +1190,7 @@ int RunForeignStreamingOrdered(
             {
                 return fail(end_status.ToString());
             }
+            MarkPartCompleted(ctx);
         }
     }
     catch (const std::exception & ex)
@@ -1138,7 +1205,7 @@ int RunForeignStreamingOrdered(
     const auto close_status = close_writer();
     if (!close_status.ok())
     {
-        std::cerr << "single-file-ordered write failed for table " << table.name << ": " << close_status.ToString() << "\n";
+        ReportError(ctx, "single-file-ordered write failed for table " + table.name + ": " + close_status.ToString());
         return 2;
     }
 
@@ -1218,37 +1285,49 @@ int GenerateTableWithStrategy(
     const auto part_count = format_driver.ResolvePartCount(table, *ctx.scale, writer_options);
     if (part_count < 1)
     {
-        std::cerr << "Invalid part_count for table " << table.name << "\n";
+        ReportError(ctx, "Invalid part_count for table " + table.name);
         return 2;
     }
 
     auto selected_strategy_result = ResolveSelectedWriteStrategy(scheduler_options, format_driver);
     if (!selected_strategy_result.ok())
     {
-        std::cerr << selected_strategy_result.status().ToString() << "\n";
+        ReportError(ctx, selected_strategy_result.status().ToString());
         return 2;
     }
     const auto strategy = std::move(selected_strategy_result).ValueOrDie();
+    MarkTableStarted(ctx, part_count);
 
+    int rc = 2;
     switch (strategy)
     {
         case WriteStrategy::ParallelPartitionFiles:
-            return RunParallelPartitionFiles(
+            rc = RunParallelPartitionFiles(
                 ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+            break;
         case WriteStrategy::SingleFileOrdered:
             switch (format_driver.OrderedExecutionModel())
             {
                 case OrderedWriteExecutionModel::NativeMultiplexed:
-                    return RunNativeMultiplexedOrdered(
+                    rc = RunNativeMultiplexedOrdered(
                         ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+                    break;
                 case OrderedWriteExecutionModel::ForeignStreaming:
-                    return RunForeignStreamingOrdered(
+                    rc = RunForeignStreamingOrdered(
                         ctx, table, output, writer_options, format_driver, part_count, scheduler_options, part_executor);
+                    break;
                 default:
-                    std::cerr << "Unsupported ordered execution model for format " << format_driver.Name() << "\n";
+                    ReportError(ctx, "Unsupported ordered execution model for format " + std::string(format_driver.Name()));
                     return 2;
             }
+            break;
         default:
             return 2;
     }
+
+    if (rc == 0)
+    {
+        MarkTableFinished(ctx);
+    }
+    return rc;
 }

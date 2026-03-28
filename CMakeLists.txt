@@ -223,7 +223,7 @@ if (TARGET sch::arrow)
     if (TARGET sch::yaclib AND SCHENGEN_BUILD_FORMAT_TARGETS)
       find_package(Boost COMPONENTS program_options REQUIRED)
 
-      add_library(schengen_scheduler STATIC src/Storage/write_scheduler.cpp)
+      add_library(schengen_scheduler STATIC src/Storage/progress.cpp src/Storage/write_scheduler.cpp)
       target_compile_features(schengen_scheduler PRIVATE cxx_std_17)
       target_include_directories(schengen_scheduler PRIVATE ${PROJECT_SOURCE_DIR}/src)
       if (DEFINED ARROW_INCLUDE_DIRS)
