@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace boost::program_options
@@ -22,6 +23,8 @@ namespace yaclib
 {
 class IExecutor;
 } // namespace yaclib
+
+class CliProgressController;
 
 struct WriteSchedulerOptions
 {
@@ -37,6 +40,8 @@ struct GenerationContext
     const ScaleConfig * scale = nullptr;
     arrow::MemoryPool * pool = nullptr;
     std::uint64_t batch_rows = 0;
+    CliProgressController * progress = nullptr;
+    std::size_t progress_table_index = std::numeric_limits<std::size_t>::max();
 };
 
 void RegisterWriteSchedulerCliOptions(boost::program_options::options_description & desc);
