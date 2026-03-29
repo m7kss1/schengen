@@ -20,7 +20,9 @@ if (DEFINED YACLIB_INCLUDE_DIRS)
   target_include_directories(table_generator_tests PRIVATE ${YACLIB_INCLUDE_DIRS})
 endif ()
 target_link_libraries(table_generator_tests PRIVATE sch::gtest_main)
-if (TARGET schengen_core)
+if (TARGET schengen::core)
+  target_link_libraries(table_generator_tests PRIVATE schengen::core)
+elseif (TARGET schengen_core)
   target_link_libraries(table_generator_tests PRIVATE schengen_core)
 endif ()
 if (TARGET sch::arrow)
@@ -83,7 +85,7 @@ if (TARGET schengen_storage)
     storage_writer_tests
     PRIVATE
       sch::gtest_main
-      schengen_core
+      schengen::core
       schengen_storage
   )
   if (TARGET schengen_scheduler)

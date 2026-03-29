@@ -123,9 +123,11 @@ if (TARGET sch::arrow)
       src/Tables/supplier.cpp
       src/Tables/table.cpp)
 
-  add_library(schengen_core SHARED ${SCHENGEN_GENERATOR_SOURCES})
+  add_library(schengen_core STATIC ${SCHENGEN_GENERATOR_SOURCES})
+  add_library(schengen::core ALIAS schengen_core)
   target_compile_features(schengen_core PRIVATE cxx_std_17)
   target_include_directories(schengen_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
+  set_target_properties(schengen_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if (DEFINED ARROW_INCLUDE_DIRS)
     target_include_directories(schengen_core PUBLIC ${ARROW_INCLUDE_DIRS})
   endif ()
@@ -202,9 +204,9 @@ if (TARGET sch::arrow)
     endforeach()
 
     target_link_libraries(
-      schengen_storage
-      PRIVATE
-        schengen_core
+        schengen_storage
+        PRIVATE
+        schengen::core
         sch::arrow
         ${_existing_storage_arrow_priv_deps}
     )
@@ -236,7 +238,7 @@ if (TARGET sch::arrow)
       target_link_libraries(
         schengen_scheduler
         PUBLIC
-          schengen_core
+          schengen::core
           schengen_storage
           ${_existing_storage_arrow_priv_deps}
           Boost::program_options
@@ -266,7 +268,7 @@ if (TARGET sch::arrow)
       target_link_libraries(
         schengen_main
         PRIVATE
-          schengen_core
+          schengen::core
           schengen_scheduler
       )
     else ()
