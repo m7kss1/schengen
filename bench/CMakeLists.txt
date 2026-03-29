@@ -10,5 +10,5 @@ target_link_libraries(
   table_iter_bench
   PRIVATE
     benchmark::benchmark_main
-    schengen_core
+    schengen::core
 )
