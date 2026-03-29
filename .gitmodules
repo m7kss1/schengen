@@ -34,3 +34,6 @@
 [submodule "contrib/corrosion"]
 	path = contrib/corrosion
 	url = git@github.com:corrosion-rs/corrosion.git
+[submodule "contrib/lance"]
+	path = contrib/lance
+	url = git@github.com:lance-format/lance.git
