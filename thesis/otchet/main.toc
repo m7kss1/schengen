@@ -1,0 +1,68 @@
+\babel@toc {russian}{}\relax 
+\contentsline {section}{Реферат}{2}{section*.3}%
+\contentsline {section}{Abstract}{3}{section*.4}%
+\contentsline {section}{Основные определения, термины и сокращения}{6}{section*.5}%
+\contentsline {section}{Введение}{7}{section*.6}%
+\contentsline {section}{\numberline {1}Предметная область и анализ аналогов}{9}{section.1}%
+\contentsline {subsection}{\numberline {1.1}TPC-H как стандарт аналитического бенчмаркинга}{9}{subsection.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.1}Назначение бенчмарка}{9}{subsubsection.1.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.2}Состав набора данных}{9}{subsubsection.1.1.2}%
+\contentsline {subsubsection}{\numberline {1.1.3}Актуальность TPC-H в современных условиях}{9}{subsubsection.1.1.3}%
+\contentsline {subsection}{\numberline {1.2}Требования современной аналитической инфраструктуры к генератору данных}{10}{subsection.1.2}%
+\contentsline {subsubsection}{\numberline {1.2.1}Требования к выходному представлению данных}{10}{subsubsection.1.2.1}%
+\contentsline {subsubsection}{\numberline {1.2.2}Требования к размещению и доступу к данным}{10}{subsubsection.1.2.2}%
+\contentsline {subsubsection}{\numberline {1.2.3}Архитектурные требования}{10}{subsubsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.3}Анализ существующих решений}{11}{subsection.1.3}%
+\contentsline {subsubsection}{\numberline {1.3.1}Генератор dbgen}{11}{subsubsection.1.3.1}%
+\contentsline {paragraph}{\numberline {1.3.1.1}Достоинства}{11}{paragraph.1.3.1.1}%
+\contentsline {paragraph}{\numberline {1.3.1.2}Ограничения}{11}{paragraph.1.3.1.2}%
+\contentsline {subsubsection}{\numberline {1.3.2}Генератор tpchgen-rs}{11}{subsubsection.1.3.2}%
+\contentsline {paragraph}{\numberline {1.3.2.1}Достоинства}{11}{paragraph.1.3.2.1}%
+\contentsline {paragraph}{\numberline {1.3.2.2}Ограничения}{11}{paragraph.1.3.2.2}%
+\contentsline {subsubsection}{\numberline {1.3.3}Сравнительный анализ и обоснование направления разработки}{11}{subsubsection.1.3.3}%
+\contentsline {subsection}{Выводы по главе}{12}{table.caption.7}%
+\contentsline {section}{\numberline {2}Архитектура генератора данных}{13}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Архитектурные требования к масштабируемой генерации}{13}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Общая идея алгоритма}{13}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Параллельная генерация на основе перемотки линейного генератора}{14}{subsection.2.3}%
+\contentsline {subsubsection}{\numberline {2.3.1}Математическая модель генератора}{14}{subsubsection.2.3.1}%
+\contentsline {subsubsection}{\numberline {2.3.2}Алгоритм быстрой перемотки и асимптотика}{15}{subsubsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.4}Архитектура слоя сериализации}{15}{subsection.2.4}%
+\contentsline {subsubsection}{\numberline {2.4.1}Форматно-зависимые компоненты записи}{15}{subsubsection.2.4.1}%
+\contentsline {subsubsection}{\numberline {2.4.2}Линейный и детерминированный режим записи}{16}{subsubsection.2.4.2}%
+\contentsline {subsection}{\numberline {2.5}Разделение модулей генерации и сериализации}{16}{subsection.2.5}%
+\contentsline {subsection}{Выводы по главе}{17}{subsection.2.5}%
+\contentsline {section}{\numberline {3}Реализация генератора данных}{18}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Реализация генерации таблиц}{18}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}Организация генерации по партициям}{18}{subsubsection.3.1.1}%
+\contentsline {subsubsection}{\numberline {3.1.2}Генерация значений и использование текстового пула}{18}{subsubsection.3.1.2}%
+\contentsline {subsubsection}{\numberline {3.1.3}Формирование таблиц набора данных}{21}{subsubsection.3.1.3}%
+\contentsline {paragraph}{\numberline {3.1.3.1}Таблица region}{21}{paragraph.3.1.3.1}%
+\contentsline {paragraph}{\numberline {3.1.3.2}Таблица nation}{21}{paragraph.3.1.3.2}%
+\contentsline {paragraph}{\numberline {3.1.3.3}Таблица supplier}{22}{paragraph.3.1.3.3}%
+\contentsline {paragraph}{\numberline {3.1.3.4}Таблица part}{22}{paragraph.3.1.3.4}%
+\contentsline {paragraph}{\numberline {3.1.3.5}Таблица partsupp}{23}{paragraph.3.1.3.5}%
+\contentsline {paragraph}{\numberline {3.1.3.6}Таблица customer}{23}{paragraph.3.1.3.6}%
+\contentsline {paragraph}{\numberline {3.1.3.7}Таблица orders}{24}{paragraph.3.1.3.7}%
+\contentsline {paragraph}{\numberline {3.1.3.8}Таблица lineitem}{25}{paragraph.3.1.3.8}%
+\contentsline {subsection}{\numberline {3.2}Реализация слоя сериализации}{25}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}Общий интерфейс записи}{25}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {3.2.2}Форматы с управляемым стримингом}{26}{subsubsection.3.2.2}%
+\contentsline {subsubsection}{\numberline {3.2.3}Форматы с нативным стримингом}{27}{subsubsection.3.2.3}%
+\contentsline {subsection}{\numberline {3.3}Интерфейс запуска и сценарии эксплуатации}{27}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Параметры командной строки}{27}{subsubsection.3.3.1}%
+\contentsline {subsubsection}{\numberline {3.3.2}Типовые сценарии запуска}{28}{subsubsection.3.3.2}%
+\contentsline {subsection}{\numberline {3.4}Реализация встраиваемого сценария}{29}{subsection.3.4}%
+\contentsline {subsubsection}{\numberline {3.4.1}Идея встроенного сценария}{29}{subsubsection.3.4.1}%
+\contentsline {subsubsection}{\numberline {3.4.2}Демонстрационный прототип для DuckDB}{29}{subsubsection.3.4.2}%
+\contentsline {subsection}{Выводы по главе}{30}{lstnumber.10.5}%
+\contentsline {section}{Заключение}{31}{section*.12}%
+\contentsline {section}{Список использованных источников}{32}{section*.13}%
+\contentsline {section}{Приложение \CYRA {}}{33}{section*.14}%
+\contentsline {section}{Приложение \CYRB {}}{34}{section*.15}%
+\contentsline {section}{Приложение \CYRV {}}{35}{section*.16}%
+\contentsline {section}{Приложение \CYRG {}}{36}{section*.17}%
+\contentsline {section}{Приложение \CYRD {}}{37}{section*.18}%
+\contentsline {section}{Приложение \CYRE {}}{38}{section*.19}%
+\contentsline {section}{Приложение \CYRZH {}}{39}{section*.20}%
+\contentsline {section}{Приложение \CYRZ {}}{41}{section*.21}%

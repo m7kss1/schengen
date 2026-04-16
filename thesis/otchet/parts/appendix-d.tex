@@ -1,0 +1,38 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:part}
+
+В приложении приведена символическая запись генератора таблицы
+part.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы part},label={lst:app-part}]
+func generate_part(partition_range, text_pool):
+    name_random = RandomStringSequence(name_seed, NAME_WORDS, color_distribution)
+    manufacturer_random = RandomBoundedInt(mfgr_seed, mfgr_min, mfgr_max)
+    brand_random = RandomBoundedInt(brand_seed, brand_min, brand_max)
+    type_random = RandomString(type_seed, part_type_distribution)
+    size_random = RandomBoundedInt(size_seed, size_min, size_max)
+    container_random = RandomString(container_seed, container_distribution)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        part_key = row_id + 1
+        mfgr_key = manufacturer_random.next_value()
+        brand_key = mfgr_key * 10 + brand_random.next_value()
+
+        emit PartRow(
+            partkey = part_key,
+            name = name_random.next_value(),
+            mfgr = format("Manufacturer#%d", mfgr_key),
+            brand = format("Brand#%d", brand_key),
+            type = type_random.next_value(),
+            size = size_random.next_value(),
+            container = container_random.next_value(),
+            retailprice = calculate_part_price(part_key) / 100.0,
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

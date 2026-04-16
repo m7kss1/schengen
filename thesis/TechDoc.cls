@@ -1,0 +1,1 @@
+sow/TechDoc.cls

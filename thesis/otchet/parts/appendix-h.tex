@@ -1,0 +1,90 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:lineitem}
+
+В приложении приведены символические записи подготовки диапазона заказов и
+формирования отдельной строки таблицы lineitem.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Подготовка диапазона заказов для lineitem},label={lst:app-lineitem-range}]
+func generate_lineitem(order_partition, scale_factor, text_pool):
+    order_date_random = RandomBoundedInt(order_date_seed, order_date_min, order_date_max)
+    line_count_random = RandomBoundedInt(line_count_seed, line_count_min, line_count_max)
+    quantity_random = RandomBoundedInt(quantity_seed, quantity_min, quantity_max, LINE_COUNT_MAX)
+    discount_random = RandomBoundedInt(discount_seed, discount_min, discount_max, LINE_COUNT_MAX)
+    tax_random = RandomBoundedInt(tax_seed, tax_min, tax_max, LINE_COUNT_MAX)
+    part_random = next_bounded_value(part_seed, 1, max_part_key(scale_factor), scale_factor, LINE_COUNT_MAX)
+    supplier_number_random = RandomBoundedInt(supplier_number_seed, 0, 3, LINE_COUNT_MAX)
+    ship_date_random = RandomBoundedInt(ship_date_seed, ship_date_min, ship_date_max, LINE_COUNT_MAX)
+    commit_date_random = RandomBoundedInt(commit_date_seed, commit_date_min, commit_date_max, LINE_COUNT_MAX)
+    receipt_date_random = RandomBoundedInt(receipt_date_seed, receipt_date_min, receipt_date_max, LINE_COUNT_MAX)
+    return_flag_random = RandomString(return_flag_seed, return_flag_distribution, LINE_COUNT_MAX)
+    ship_instruct_random = RandomString(ship_instruct_seed, ship_instruct_distribution, LINE_COUNT_MAX)
+    ship_mode_random = RandomString(ship_mode_seed, ship_mode_distribution, LINE_COUNT_MAX)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length, LINE_COUNT_MAX)
+    generators = LineitemGenerators(
+        quantity_random,
+        discount_random,
+        tax_random,
+        part_random,
+        supplier_number_random,
+        ship_date_random,
+        commit_date_random,
+        receipt_date_random,
+        return_flag_random,
+        ship_instruct_random,
+        ship_mode_random,
+        comment_random
+    )
+
+    advance_all_randoms_to(order_partition.start_row)
+
+    for order_row in range(order_partition.start_row, order_partition.end_row):
+        order_index = order_row + 1
+        order_key = make_sparse_order_key(order_index)
+        order_date = order_date_random.next_value()
+        line_count = line_count_random.next_value()
+
+        for line_number in range(1, line_count + 1):
+            emit build_lineitem_row(
+                order_key,
+                line_number,
+                order_date,
+                scale_factor,
+                generators
+            )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование строки lineitem},label={lst:app-lineitem-row}]
+func build_lineitem_row(order_key, line_number, order_date, scale_factor, generators):
+    part_key = generators.part_random.next_value()
+    supplier_number = generators.supplier_number_random.next_value()
+    supplier_key = select_part_supplier(part_key, supplier_number, scale_factor)
+    quantity = generators.quantity_random.next_value()
+    discount = generators.discount_random.next_value()
+    tax = generators.tax_random.next_value()
+
+    ship_date = order_date + generators.ship_date_random.next_value()
+    commit_date = order_date + generators.commit_date_random.next_value()
+    receipt_date = ship_date + generators.receipt_date_random.next_value()
+
+    return LineitemRow(
+        orderkey = order_key,
+        partkey = part_key,
+        suppkey = supplier_key,
+        linenumber = line_number,
+        quantity = quantity,
+        extendedprice = calculate_part_price(part_key) * quantity / 100.0,
+        discount = discount / 100.0,
+        tax = tax / 100.0,
+        returnflag = derive_return_flag(receipt_date, generators.return_flag_random),
+        linestatus = derive_line_status(ship_date),
+        shipdate = ship_date,
+        commitdate = commit_date,
+        receiptdate = receipt_date,
+        shipinstruct = generators.ship_instruct_random.next_value(),
+        shipmode = generators.ship_mode_random.next_value(),
+        comment = generators.comment_random.next_value()
+    )
+\end{lstlisting}

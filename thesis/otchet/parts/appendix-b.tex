@@ -1,0 +1,19 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:nation}
+
+В приложении приведена символическая запись генератора таблицы
+nation.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы nation},label={lst:app-nation}]
+func generate_nation(text_pool):
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    for nation_key in range(0, NATION_COUNT):
+        emit NationRow(
+            nationkey = nation_key,
+            name = NATION_NAMES[nation_key],
+            regionkey = REGION_BY_NATION[nation_key],
+            comment = comment_random.next_value()
+        )
+\end{lstlisting}

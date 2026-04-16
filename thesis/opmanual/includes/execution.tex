@@ -1,0 +1,145 @@
+\section{Выполнение программы}
+
+\subsection{Подготовка к работе}
+
+Перед запуском программы оператор должен:
+\begin{enumerate}
+    \item убедиться в наличии исполняемого файла программы;
+    \item определить каталог или URI вывода результатов;
+    \item выбрать формат хранения выходных данных;
+    \item определить масштаб генерации и перечень таблиц;
+    \item проверить наличие прав на запись в целевой каталог или хранилище.
+\end{enumerate}
+
+\subsection{Загрузка программы}
+
+Программа не требует отдельной процедуры загрузки в память оператором и
+запускается как обычное консольное приложение из командной строки.
+
+Общий вид вызова программы:
+
+\begin{verbatim}
+schengen_main [параметры]
+\end{verbatim}
+
+\subsection{Запуск программы}
+
+Для получения справки оператор должен использовать команду:
+
+\begin{verbatim}
+schengen_main --help
+\end{verbatim}
+
+Для вывода списка доступных таблиц используется команда:
+
+\begin{verbatim}
+schengen_main --list-tables
+\end{verbatim}
+
+Для вывода списка доступных форматов используется команда:
+
+\begin{verbatim}
+schengen_main --list-formats
+\end{verbatim}
+
+Пример типового запуска программы:
+
+\begin{verbatim}
+schengen_main \
+  --scale-factor 1 \
+  --output-format parquet \
+  --output-path ./out \
+  --table customer orders lineitem
+\end{verbatim}
+
+\subsection{Команды оператора}
+
+Основными параметрами командной строки являются:
+\begin{enumerate}
+    \item \texttt{--help} -- вывод справки;
+    \item \texttt{--list-tables} -- вывод списка доступных таблиц;
+    \item \texttt{--list-formats} -- вывод списка доступных форматов;
+    \item \texttt{--scale-factor} -- задание масштаба генерации;
+    \item \texttt{--output-format} -- задание формата выходных данных;
+    \item \texttt{--output-path} -- задание каталога или URI вывода;
+    \item \texttt{--table} -- указание одной или нескольких таблиц для генерации;
+    \item \texttt{--batch-rows} -- задание числа строк в батче;
+    \item \texttt{--write-strategy} -- выбор стратегии записи;
+    \item \texttt{--write-workers} -- задание числа рабочих потоков обработки;
+    \item \texttt{--write-queue-capacity} -- задание емкости очереди записи;
+    \item \texttt{--verbosity} -- выбор режима вывода хода выполнения.
+\end{enumerate}
+
+Для формата \texttt{parquet} могут использоваться дополнительные параметры:
+\begin{enumerate}
+    \item \texttt{--parquet-use-threads};
+    \item \texttt{--parquet-row-group-bytes};
+    \item \texttt{--parquet-max-row-group-rows};
+    \item \texttt{--parquet-output-buffer-bytes};
+    \item \texttt{--parquet-compression}.
+\end{enumerate}
+
+Для формата \texttt{orc} могут использоваться дополнительные параметры:
+\begin{enumerate}
+    \item \texttt{--orc-max-partition-rows};
+    \item \texttt{--orc-stripe-bytes};
+    \item \texttt{--orc-max-stripe-rows};
+    \item \texttt{--orc-output-buffer-bytes};
+    \item \texttt{--orc-compression}.
+\end{enumerate}
+
+\subsection{Управление выполнением программы}
+
+Если параметр \texttt{--verbosity verbose} задан, программа выводит сведения о ходе
+выполнения по таблицам. Если параметр \texttt{--verbosity quiet} не изменен, программа
+работает в минимальном режиме вывода и сообщает оператору преимущественно об
+ошибках.
+
+Стратегия записи задается параметром \texttt{--write-strategy}. Допустимыми значениями
+являются:
+\begin{enumerate}
+    \item \texttt{auto};
+    \item \texttt{parallel-files};
+    \item \texttt{single-file-ordered}.
+\end{enumerate}
+
+Число потоков обработки задается параметром \texttt{--write-workers}. Значение \texttt{0}
+означает автоматический выбор.
+
+\subsection{Завершение работы программы}
+
+После завершения генерации программа закрывает используемые потоки обработки,
+завершает запись выходных данных и возвращает код завершения в операционную
+систему.
+
+При успешном завершении программа возвращает код \texttt{0}. При ошибке параметров
+запуска, неподдерживаемом формате, недопустимой стратегии записи либо сбое
+выполнения программа возвращает ненулевой код завершения.
+
+\subsection{Примеры выполнения}
+
+Пример генерации всех таблиц в формат \texttt{parquet}:
+
+\begin{verbatim}
+schengen_main --scale-factor 1 --output-format parquet --output-path ./out
+\end{verbatim}
+
+Пример генерации выбранных таблиц в формате \texttt{orc}:
+
+\begin{verbatim}
+schengen_main \
+  --scale-factor 1 \
+  --output-format orc \
+  --output-path ./out_orc \
+  --table customer orders lineitem
+\end{verbatim}
+
+Пример запуска с подробным выводом хода выполнения:
+
+\begin{verbatim}
+schengen_main \
+  --scale-factor 1 \
+  --output-format parquet \
+  --output-path ./out \
+  --verbosity verbose
+\end{verbatim}

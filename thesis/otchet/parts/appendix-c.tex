@@ -1,0 +1,41 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:supplier}
+
+В приложении приведена символическая запись генератора таблицы
+supplier.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы supplier},label={lst:app-supplier}]
+func generate_supplier(partition_range, text_pool):
+    address_random = RandomAlphaNumeric(address_seed, average_address_length)
+    nation_random = RandomBoundedInt(nation_seed, 0, NATION_COUNT - 1)
+    phone_random = RandomPhoneNumber(phone_seed)
+    acctbal_random = RandomBoundedInt(acctbal_seed, acctbal_min, acctbal_max)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+    bbb_gate_random = RandomBoundedInt(bbb_seed, 1, SCALE_BASE)
+    bbb_junk_random = RowRandomInt(bbb_junk_seed, 1)
+    bbb_offset_random = RowRandomInt(bbb_offset_seed, 1)
+    bbb_type_random = RandomBoundedInt(bbb_type_seed, 0, 100)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        supplier_key = row_id + 1
+        nation_key = nation_random.next_value()
+        comment = copy(comment_random.next_value())
+
+        if bbb_gate_random.next_value() <= BBB_COMMENTS_PER_SCALE_BASE:
+            comment = apply_bbb_comment(comment, bbb_junk_random, bbb_offset_random, bbb_type_random)
+
+        emit SupplierRow(
+            suppkey = supplier_key,
+            name = format("Supplier#%09d", supplier_key),
+            address = address_random.next_value(),
+            nationkey = nation_key,
+            phone = phone_random.next_value(nation_key),
+            acctbal = acctbal_random.next_value() / 100.0,
+            comment = comment
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

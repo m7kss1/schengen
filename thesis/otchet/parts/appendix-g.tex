@@ -1,0 +1,59 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:orders}
+
+В приложении приведена символическая запись генератора таблицы
+orders.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы orders},label={lst:app-orders}]
+func generate_orders(partition_range, scale_factor, text_pool):
+    order_date_random = RandomBoundedInt(order_date_seed, order_date_min, order_date_max)
+    line_count_random = RandomBoundedInt(line_count_seed, line_count_min, line_count_max)
+    customer_random = next_bounded_value(customer_seed, 1, max_customer_key(scale_factor), scale_factor, 1)
+    priority_random = RandomString(priority_seed, order_priority_distribution)
+    clerk_random = RandomBoundedInt(clerk_seed, 1, max_clerk(scale_factor))
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    quantity_random = RandomBoundedInt(quantity_seed, quantity_min, quantity_max, LINE_COUNT_MAX)
+    discount_random = RandomBoundedInt(discount_seed, discount_min, discount_max, LINE_COUNT_MAX)
+    tax_random = RandomBoundedInt(tax_seed, tax_min, tax_max, LINE_COUNT_MAX)
+    part_random = next_bounded_value(part_seed, 1, max_part_key(scale_factor), scale_factor, LINE_COUNT_MAX)
+    ship_date_random = RandomBoundedInt(ship_date_seed, ship_date_min, ship_date_max, LINE_COUNT_MAX)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        order_index = row_id + 1
+        order_key = make_sparse_order_key(order_index)
+        order_date = order_date_random.next_value()
+        customer_key = adjust_customer_key(customer_random.next_value(), max_customer_key(scale_factor))
+
+        total_price = 0
+        shipped_count = 0
+        line_count = line_count_random.next_value()
+
+        for line_number in range(1, line_count + 1):
+            quantity = quantity_random.next_value()
+            discount = discount_random.next_value()
+            tax = tax_random.next_value()
+            part_key = part_random.next_value()
+            ship_date = order_date + ship_date_random.next_value()
+
+            total_price += calculate_line_total(part_key, quantity, discount, tax)
+            if is_in_past(ship_date):
+                shipped_count += 1
+
+        emit OrderRow(
+            orderkey = order_key,
+            custkey = customer_key,
+            orderstatus = derive_order_status(shipped_count, line_count),
+            totalprice = total_price / 100.0,
+            orderdate = order_date,
+            orderpriority = priority_random.next_value(),
+            clerk = format("Clerk#%09d", clerk_random.next_value()),
+            shippriority = 0,
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

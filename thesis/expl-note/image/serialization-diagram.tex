@@ -1,0 +1,55 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage[active,tightpage]{preview}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\PreviewEnvironment{tikzpicture}
+\setlength{\PreviewBorder}{4pt}
+\pagestyle{empty}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=10mm and 10mm,
+    box/.style={draw, rounded corners, align=center, minimum width=30mm, minimum height=8mm},
+    widebox/.style={draw, rounded corners, align=center, minimum width=42mm, minimum height=8mm},
+    arrow/.style={-{Stealth[length=2.2mm]}, thick}
+]
+\node[widebox] (batch) {Сформированные\\батчи};
+
+\node[box, below left=18mm and 18mm of batch] (pf1) {Партиция 1};
+\node[box, below=of pf1] (pf2) {Партиция 2};
+\node[box, below=of pf2] (pfn) {Партиция N};
+\node[box, right=of pf2] (pffiles) {Файлы\\партиций};
+\node[box, below=of pffiles] (pforder) {Порядок по имени\\\texttt{part-num}};
+
+\node[box, below right=18mm and 18mm of batch] (so1) {Рабочий поток 1};
+\node[box, below=of so1] (so2) {Рабочий поток 2};
+\node[box, below=of so2] (son) {Рабочий поток N};
+\node[widebox, right=of so2] (queue) {Bounded MPSC\\очередь};
+\node[widebox, right=of queue] (buffer) {Буфер по номеру\\партиции};
+\node[box, right=of buffer] (next) {\texttt{expected\_part}};
+\node[box, right=of next] (writer) {Единый writer};
+\node[box, right=of writer] (single) {Один итоговый\\файл};
+
+\node[align=center, above=2mm of pf1] (lefttitle) {\shortstack{\texttt{parallel-}\\\texttt{files}}};
+\node[align=center, above=2mm of so1] (righttitle) {\shortstack{\texttt{single-file-}\\\texttt{ordered}}};
+
+\draw[arrow] (batch) -- (pf1);
+\draw[arrow] (batch) -- (so1);
+\draw[arrow] (pf1) -- (pffiles);
+\draw[arrow] (pf2) -- (pffiles);
+\draw[arrow] (pfn) -- (pffiles);
+\draw[arrow] (pffiles) -- (pforder);
+\draw[arrow] (so1) -- (queue);
+\draw[arrow] (so2) -- (queue);
+\draw[arrow] (son) -- (queue);
+\draw[arrow] (queue) -- (buffer);
+\draw[arrow] (buffer) -- (next);
+\draw[arrow] (next) -- (writer);
+\draw[arrow] (writer) -- (single);
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,20 @@
+This thesis is devoted to the development of a data generator for the TPC-H
+analytical DBMS benchmark. The relevance of the work is determined by the fact
+that traditional TPC-H data generation tools are mostly focused on row-oriented
+text output and do not meet the requirements of modern analytical
+infrastructures that rely on columnar data representation, remote object
+storage, and in-memory data generation scenarios.
+
+The goal of the work is to develop the Schengen generator that provides
+deterministic TPC-H table generation, parallel execution, direct output to
+modern storage formats, and a clear separation between the data generation core
+and the serialization layer.
+
+The result of the work is a C++ software system that generates TPC-H tables,
+builds Apache Arrow~\cite{apache-arrow} batches, writes them to
+Parquet~\cite{apache-parquet}, ORC~\cite{apache-orc},
+Lance~\cite{lance-format}, and Vortex~\cite{vortex-format}
+formats, and stores the output either on a local file system or in
+S3-compatible storage. The generator can also be embedded directly
+into analytical systems without intermediate disk materialization, which is
+demonstrated by its integration with DuckDB~\cite{schengen-duckdb-repo}.

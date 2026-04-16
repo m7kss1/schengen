@@ -1,0 +1,119 @@
+% creator: ilyakooo0
+% extra credit: dashared
+% version: 1.0.1
+
+\PassOptionsToPackage{main=russian,english}{babel}
+
+\documentclass{../TechDoc}
+\usepackage{pmboxdraw}
+
+\title{Генератор данных для аналитического бенчмарка СУБД TPC-H}
+\author{Студент БПИ225}{Дергоусов М.А}
+\academicTeacher{Профессор департамента программной инженерии ФКН НИУ ВШЭ}{Шилов В.В}
+
+\documentTitle{Пояснительная записка}
+\documentCode{RU.17701729.11.03-01 81 01-1}
+
+\definecolor{listingbg}{gray}{0.96}
+\definecolor{listingkw}{RGB}{0,74,140}
+\definecolor{listingtype}{RGB}{120,78,0}
+\definecolor{listingcomment}{RGB}{0,120,60}
+\definecolor{listingstring}{RGB}{163,21,21}
+\renewcommand{\lstlistingname}{Листинг}
+\DeclareCaptionLabelSeparator{listinghyphen}{ - }
+\captionsetup[lstlisting]{
+    font=small,
+    labelfont=bf,
+    justification=raggedright,
+    singlelinecheck=false,
+    skip=6pt,
+    labelsep=listinghyphen
+}
+\captionsetup[figure]{
+    labelsep=listinghyphen
+}
+
+\DeclareRobustCommand{\srcref}[1]{\mbox{\hyperlink{src:#1}{[#1]}}}
+
+\lstdefinelanguage{DSS}{
+    sensitive=false,
+    morekeywords={BEGIN,END,COUNT,begin,end,count},
+    morekeywords=[2]{grammar,np,vp,articles,nouns,verbs,adverbs,prepositions},
+    morekeywords=[3]{N,V,P,T,J,D,X},
+    morecomment=[l]{\#}
+}
+
+\lstdefinestyle{dsslisting}{
+    language=DSS,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{listingkw}\bfseries,
+    keywordstyle=[2]\color{listingtype}\bfseries,
+    keywordstyle=[3]\color{listingstring}\bfseries,
+    commentstyle=\color{listingcomment}\itshape,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    keepspaces=true,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{black},
+    backgroundcolor=\color{listingbg},
+    framesep=6pt,
+    captionpos=b,
+    aboveskip=6pt,
+    belowskip=10pt
+}
+
+\lstdefinelanguage{DuckDBPlan}{
+    sensitive=false,
+    alsoletter={_},
+    morekeywords={EXPLAIN,SELECT,FROM,WHERE,GROUP,BY,ORDER,SUM,AVG,COUNT,AS,DATE,CALL},
+    morekeywords=[2]{OPTIMIZED_LOGICAL_PLAN,ORDER_BY,PROJECTION,AGGREGATE,FILTER,SCHENGEN_SCAN},
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+
+\lstdefinestyle{duckdbplanlisting}{
+    language=DuckDBPlan,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{listingkw}\bfseries,
+    keywordstyle=[2]\color{listingtype}\bfseries,
+    commentstyle=\color{listingcomment}\itshape,
+    stringstyle=\color{listingstring},
+    breaklines=false,
+    columns=fixed,
+    showstringspaces=false,
+    keepspaces=true,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{black},
+    backgroundcolor=\color{listingbg},
+    framesep=6pt,
+    captionpos=b,
+    aboveskip=6pt,
+    belowskip=10pt,
+    literate=
+        {┌}{{\textSFi}}1
+        {┐}{{\textSFiii}}1
+        {└}{{\textSFii}}1
+        {┘}{{\textSFiv}}1
+        {─}{{\textSFx}}1
+        {│}{{\textSFxi}}1
+        {┬}{{\textSFvi}}1
+        {┴}{{\textSFvii}}1
+}
+
+\begin{document}
+    \maketitle
+
+    \tableofcontents
+
+    \input{includes/introduction}
+    \input{includes/purpose}
+    \input{includes/technical}
+    \input{includes/economics}
+    \input{includes/sources}
+
+    \registrationList
+
+\end{document}

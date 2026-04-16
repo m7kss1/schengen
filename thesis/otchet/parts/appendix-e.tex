@@ -1,0 +1,31 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:partsupp}
+
+В приложении приведена символическая запись генератора таблицы
+partsupp.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы partsupp},label={lst:app-partsupp}]
+func generate_partsupp(partition_range, scale_factor, text_pool):
+    availqty_random = RandomBoundedInt(availqty_seed, availqty_min, availqty_max, 4)
+    supplycost_random = RandomBoundedInt(supplycost_seed, supplycost_min, supplycost_max, 4)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length, 4)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for part_row in range(partition_range.start_row, partition_range.end_row):
+        part_key = part_row + 1
+
+        for supplier_number in range(0, 4):
+            supplier_key = select_part_supplier(part_key, supplier_number, scale_factor)
+
+            emit PartSuppRow(
+                partkey = part_key,
+                suppkey = supplier_key,
+                availqty = availqty_random.next_value(),
+                supplycost = supplycost_random.next_value() / 100.0,
+                comment = comment_random.next_value()
+            )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

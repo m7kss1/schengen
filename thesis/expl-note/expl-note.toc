@@ -1,0 +1,36 @@
+\babel@toc {russian}{}\relax 
+\contentsline {section}{\numberline {1}Введение}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Наименование разработки}{3}{subsection.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.1}Наименование разработки на русском языке}{3}{subsubsection.1.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.2}Наименование разработки на английском языке}{3}{subsubsection.1.1.2}%
+\contentsline {subsubsection}{\numberline {1.1.3}Условное обозначение темы разработки}{3}{subsubsection.1.1.3}%
+\contentsline {subsection}{\numberline {1.2}Документы, являющиеся основанием для разработки}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Предпосылки разработки}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Назначение и область применения}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Назначение программы}{4}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Область применения программы}{4}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Технические характеристики}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Постановка задачи, применяемые методы, допущения и ограничения}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Описание алгоритма и функционирования программы}{5}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}Общая идея алгоритма}{5}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {3.2.2}Генерация значений и использование текстового пула}{5}{subsubsection.3.2.2}%
+\contentsline {subsubsection}{\numberline {3.2.3}Формирование таблиц набора данных}{7}{subsubsection.3.2.3}%
+\contentsline {paragraph}{\numberline {3.2.3.1}Таблица \texttt {region}}{8}{paragraph.3.2.3.1}%
+\contentsline {paragraph}{\numberline {3.2.3.2}Таблица \texttt {nation}}{8}{paragraph.3.2.3.2}%
+\contentsline {paragraph}{\numberline {3.2.3.3}Таблица \texttt {supplier}}{8}{paragraph.3.2.3.3}%
+\contentsline {paragraph}{\numberline {3.2.3.4}Таблица \texttt {part}}{9}{paragraph.3.2.3.4}%
+\contentsline {paragraph}{\numberline {3.2.3.5}Таблица \texttt {partsupp}}{9}{paragraph.3.2.3.5}%
+\contentsline {paragraph}{\numberline {3.2.3.6}Таблица \texttt {customer}}{9}{paragraph.3.2.3.6}%
+\contentsline {paragraph}{\numberline {3.2.3.7}Таблица \texttt {orders}}{10}{paragraph.3.2.3.7}%
+\contentsline {paragraph}{\numberline {3.2.3.8}Таблица \texttt {lineitem}}{10}{paragraph.3.2.3.8}%
+\contentsline {subsubsection}{\numberline {3.2.4}Сериализация результатов}{10}{subsubsection.3.2.4}%
+\contentsline {paragraph}{\numberline {3.2.4.1}Форматы Parquet и ORC.}{11}{paragraph.3.2.4.1}%
+\contentsline {paragraph}{\numberline {3.2.4.2}Форматы Lance и Vortex.}{11}{paragraph.3.2.4.2}%
+\contentsline {subsection}{\numberline {3.3}Организация входных и выходных данных}{11}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Состав технических и программных средств}{12}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Ожидаемые технико-экономические показатели}{13}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Сокращение трудоемкости подготовки данных}{13}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Снижение инфраструктурных издержек}{13}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Расширение вариантов интеграции}{13}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Ожидаемые оперативные показатели}{16}{subsection.4.4}%
+\contentsline {section}{\numberline {5}Источники, использованные при разработке}{17}{section.5}%

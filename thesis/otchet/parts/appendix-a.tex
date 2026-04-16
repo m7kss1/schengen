@@ -1,0 +1,18 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:region}
+
+В приложении приведена символическая запись генератора таблицы
+region.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы region},label={lst:app-region}]
+func generate_region(text_pool):
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    for region_key in range(0, REGION_COUNT):
+        emit RegionRow(
+            regionkey = region_key,
+            name = REGION_NAMES[region_key],
+            comment = comment_random.next_value()
+        )
+\end{lstlisting}

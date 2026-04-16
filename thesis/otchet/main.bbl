@@ -1,0 +1,715 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global}
+    \entry{apache-arrow}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{A Cross-Language Development Platform for In-Memory Data}
+      \field{title}{Apache Arrow}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://arrow.apache.org/
+      \endverb
+      \verb{url}
+      \verb https://arrow.apache.org/
+      \endverb
+    \endentry
+    \entry{apache-parquet}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache Parquet}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://parquet.apache.org/docs/
+      \endverb
+      \verb{url}
+      \verb https://parquet.apache.org/docs/
+      \endverb
+    \endentry
+    \entry{apache-orc}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache ORC}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://orc.apache.org/docs/
+      \endverb
+      \verb{url}
+      \verb https://orc.apache.org/docs/
+      \endverb
+    \endentry
+    \entry{lance-format}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Columnar Data Format and Dataset Format}
+      \field{title}{Lance}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/lancedb/lance
+      \endverb
+      \verb{url}
+      \verb https://github.com/lancedb/lance
+      \endverb
+    \endentry
+    \entry{vortex-format}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{An Adaptive File Format for Arrow}
+      \field{title}{Vortex}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/spiraldb/vortex
+      \endverb
+      \verb{url}
+      \verb https://github.com/spiraldb/vortex
+      \endverb
+    \endentry
+    \entry{schengen-duckdb-repo}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{DuckDB extension for in-memory TPC-H data generation}
+      \field{title}{Schengen-DuckDB}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/m7kss1/schengen-duckdb
+      \endverb
+      \verb{url}
+      \verb https://github.com/m7kss1/schengen-duckdb
+      \endverb
+    \endentry
+    \entry{duckdb-extensions}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {DuckDB Foundation}%
+      }
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{Extensions}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://duckdb.org/docs/stable/extensions/overview.html
+      \endverb
+      \verb{url}
+      \verb https://duckdb.org/docs/stable/extensions/overview.html
+      \endverb
+    \endentry
+    \entry{tpch-spec}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {Transaction Processing Performance Council}%
+      }
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{TPC Benchmark H Standard Specification}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{version}{2.17.1}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf
+      \endverb
+      \verb{url}
+      \verb https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf
+      \endverb
+    \endentry
+    \entry{apache-iceberg}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache Iceberg}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://iceberg.apache.org/
+      \endverb
+      \verb{url}
+      \verb https://iceberg.apache.org/
+      \endverb
+    \endentry
+    \entry{dewitt-gray}{article}{}
+      \name{author}{2}{}{%
+        {{hash=927410e42e904fa112aeca500003e41b}{%
+           family={DeWitt},
+           familyi={D\bibinitperiod},
+           given={David\bibnamedelima J.},
+           giveni={D\bibinitperiod\bibinitdelim J\bibinitperiod}}}%
+        {{hash=d2f74f5c31108f8e927626ee785fec46}{%
+           family={Gray},
+           familyi={G\bibinitperiod},
+           given={Jim},
+           giveni={J\bibinitperiod}}}%
+      }
+      \list{language}{1}{%
+        {english}%
+      }
+      \strng{namehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{fullhash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{bibnamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authorbibnamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authornamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authorfullhash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{internalsortvolume}{35}
+      \field{journaltitle}{Communications of the ACM}
+      \field{title}{Parallel Database Systems: The Future of High Performance Database Systems}
+      \field{year}{1992}
+      \field{number}{6}
+      \range{number}{1}
+      \field{pages}{85\bibrangedash 98}
+      \range{pages}{14}
+      \field{volume}{35}
+      \range{volume}{1}
+    \endentry
+    \entry{dbgen-mirror}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Mirror of the TPC-H dbgen implementation}
+      \field{title}{tpch-dbgen}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/electrum/tpch-dbgen
+      \endverb
+      \verb{url}
+      \verb https://github.com/electrum/tpch-dbgen
+      \endverb
+    \endentry
+    \entry{schengen-repo}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Data Generator for the TPC-H Analytical DBMS Benchmark}
+      \field{title}{Schengen}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/m7kss1/schengen
+      \endverb
+      \verb{url}
+      \verb https://github.com/m7kss1/schengen
+      \endverb
+    \endentry
+    \entry{tpchgen-rs}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Parallel TPC-H data generator with Arrow support}
+      \field{title}{tpchgen-rs}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://lib.rs/crates/tpchgen
+      \endverb
+      \verb{url}
+      \verb https://lib.rs/crates/tpchgen
+      \endverb
+    \endentry
+    \entry{vyukov-mpsc}{online}{}
+      \name{author}{1}{}{%
+        {{hash=e40ab006582ef2b745a2fece58d27c43}{%
+           family={Vyukov},
+           familyi={V\bibinitperiod},
+           given={Dmitry},
+           giveni={D\bibinitperiod}}}%
+      }
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {1024cores}%
+      }
+      \strng{namehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{fullhash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{bibnamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authorbibnamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authornamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authorfullhash}{e40ab006582ef2b745a2fece58d27c43}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{MPSC Queue}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues
+      \endverb
+      \verb{url}
+      \verb https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues
+      \endverb
+    \endentry
+  \enddatalist
+  \datalist[entry]{nty/global//global/global}
+    \entry{apache-arrow}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{A}
+      \field{sortinithash}{2f401846e2029bad6b3ecc16d50031e2}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{A Cross-Language Development Platform for In-Memory Data}
+      \field{title}{Apache Arrow}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://arrow.apache.org/
+      \endverb
+      \verb{url}
+      \verb https://arrow.apache.org/
+      \endverb
+    \endentry
+    \entry{apache-iceberg}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{A}
+      \field{sortinithash}{2f401846e2029bad6b3ecc16d50031e2}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache Iceberg}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://iceberg.apache.org/
+      \endverb
+      \verb{url}
+      \verb https://iceberg.apache.org/
+      \endverb
+    \endentry
+    \entry{apache-orc}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{A}
+      \field{sortinithash}{2f401846e2029bad6b3ecc16d50031e2}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache ORC}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://orc.apache.org/docs/
+      \endverb
+      \verb{url}
+      \verb https://orc.apache.org/docs/
+      \endverb
+    \endentry
+    \entry{apache-parquet}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{A}
+      \field{sortinithash}{2f401846e2029bad6b3ecc16d50031e2}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Documentation}
+      \field{title}{Apache Parquet}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://parquet.apache.org/docs/
+      \endverb
+      \verb{url}
+      \verb https://parquet.apache.org/docs/
+      \endverb
+    \endentry
+    \entry{dewitt-gray}{article}{}
+      \name{author}{2}{}{%
+        {{hash=927410e42e904fa112aeca500003e41b}{%
+           family={DeWitt},
+           familyi={D\bibinitperiod},
+           given={David\bibnamedelima J.},
+           giveni={D\bibinitperiod\bibinitdelim J\bibinitperiod}}}%
+        {{hash=d2f74f5c31108f8e927626ee785fec46}{%
+           family={Gray},
+           familyi={G\bibinitperiod},
+           given={Jim},
+           giveni={J\bibinitperiod}}}%
+      }
+      \list{language}{1}{%
+        {english}%
+      }
+      \strng{namehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{fullhash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{bibnamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authorbibnamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authornamehash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \strng{authorfullhash}{54f027e1d570c8277bbed6cd9bd9c9e0}
+      \field{sortinit}{D}
+      \field{sortinithash}{6f385f66841fb5e82009dc833c761848}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{internalsortvolume}{35}
+      \field{journaltitle}{Communications of the ACM}
+      \field{title}{Parallel Database Systems: The Future of High Performance Database Systems}
+      \field{year}{1992}
+      \field{number}{6}
+      \range{number}{1}
+      \field{pages}{85\bibrangedash 98}
+      \range{pages}{14}
+      \field{volume}{35}
+      \range{volume}{1}
+    \endentry
+    \entry{duckdb-extensions}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {DuckDB Foundation}%
+      }
+      \field{sortinit}{E}
+      \field{sortinithash}{8da8a182d344d5b9047633dfc0cc9131}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{Extensions}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://duckdb.org/docs/stable/extensions/overview.html
+      \endverb
+      \verb{url}
+      \verb https://duckdb.org/docs/stable/extensions/overview.html
+      \endverb
+    \endentry
+    \entry{lance-format}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{L}
+      \field{sortinithash}{7c47d417cecb1f4bd38d1825c427a61a}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Columnar Data Format and Dataset Format}
+      \field{title}{Lance}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/lancedb/lance
+      \endverb
+      \verb{url}
+      \verb https://github.com/lancedb/lance
+      \endverb
+    \endentry
+    \entry{schengen-repo}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Data Generator for the TPC-H Analytical DBMS Benchmark}
+      \field{title}{Schengen}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/m7kss1/schengen
+      \endverb
+      \verb{url}
+      \verb https://github.com/m7kss1/schengen
+      \endverb
+    \endentry
+    \entry{schengen-duckdb-repo}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{DuckDB extension for in-memory TPC-H data generation}
+      \field{title}{Schengen-DuckDB}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/m7kss1/schengen-duckdb
+      \endverb
+      \verb{url}
+      \verb https://github.com/m7kss1/schengen-duckdb
+      \endverb
+    \endentry
+    \entry{tpch-spec}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {Transaction Processing Performance Council}%
+      }
+      \field{sortinit}{T}
+      \field{sortinithash}{9af77f0292593c26bde9a56e688eaee9}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{TPC Benchmark H Standard Specification}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{version}{2.17.1}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf
+      \endverb
+      \verb{url}
+      \verb https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf
+      \endverb
+    \endentry
+    \entry{dbgen-mirror}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{t}
+      \field{sortinithash}{9af77f0292593c26bde9a56e688eaee9}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Mirror of the TPC-H dbgen implementation}
+      \field{title}{tpch-dbgen}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/electrum/tpch-dbgen
+      \endverb
+      \verb{url}
+      \verb https://github.com/electrum/tpch-dbgen
+      \endverb
+    \endentry
+    \entry{tpchgen-rs}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{t}
+      \field{sortinithash}{9af77f0292593c26bde9a56e688eaee9}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{Parallel TPC-H data generator with Arrow support}
+      \field{title}{tpchgen-rs}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://lib.rs/crates/tpchgen
+      \endverb
+      \verb{url}
+      \verb https://lib.rs/crates/tpchgen
+      \endverb
+    \endentry
+    \entry{vortex-format}{online}{}
+      \list{language}{1}{%
+        {english}%
+      }
+      \field{sortinit}{V}
+      \field{sortinithash}{afb52128e5b4dc4b843768c0113d673b}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{subtitle}{An Adaptive File Format for Arrow}
+      \field{title}{Vortex}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/spiraldb/vortex
+      \endverb
+      \verb{url}
+      \verb https://github.com/spiraldb/vortex
+      \endverb
+    \endentry
+    \entry{vyukov-mpsc}{online}{}
+      \name{author}{1}{}{%
+        {{hash=e40ab006582ef2b745a2fece58d27c43}{%
+           family={Vyukov},
+           familyi={V\bibinitperiod},
+           given={Dmitry},
+           giveni={D\bibinitperiod}}}%
+      }
+      \list{language}{1}{%
+        {english}%
+      }
+      \list{organization}{1}{%
+        {1024cores}%
+      }
+      \strng{namehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{fullhash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{bibnamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authorbibnamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authornamehash}{e40ab006582ef2b745a2fece58d27c43}
+      \strng{authorfullhash}{e40ab006582ef2b745a2fece58d27c43}
+      \field{sortinit}{V}
+      \field{sortinithash}{afb52128e5b4dc4b843768c0113d673b}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{media}{eresource}
+      \field{title}{MPSC Queue}
+      \field{urlday}{7}
+      \field{urlmonth}{4}
+      \field{urlyear}{2026}
+      \field{year}{2026}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues
+      \endverb
+      \verb{url}
+      \verb https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+

@@ -1,0 +1,57 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage[active,tightpage]{preview}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,backgrounds,fit,positioning}
+
+\PreviewEnvironment{tikzpicture}
+\setlength{\PreviewBorder}{4pt}
+\pagestyle{empty}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=7mm and 10mm,
+    box/.style={
+        draw,
+        rounded corners,
+        fill=white,
+        align=center,
+        text width=31mm,
+        minimum height=10mm,
+        inner sep=2mm
+    },
+    group/.style={draw, rounded corners, fill=gray!7, inner sep=5mm},
+    grouplabel/.style={font=\bfseries},
+    flow/.style={-{Stealth[length=2.2mm]}, thick}
+]
+\node[box] (query) {SQL-запрос};
+\node[box, below=of query] (scan) {\texttt{SCHENGEN\_SCAN}};
+\node[box, below=of scan] (ops) {\texttt{FILTER}\\\texttt{AGGREGATE}\\\texttt{ORDER BY}};
+\node[box, below=of ops] (result) {Результат};
+
+\node[box, right=of scan] (adapter) {Адаптер\\расширения};
+
+\node[box, right=of adapter] (generate) {Генерация\\строк};
+\node[box, below=of generate] (batch) {Батч Arrow\\в памяти};
+
+\draw[flow] (query) -- (scan);
+\draw[flow] (scan) -- (adapter);
+\draw[flow] (adapter) -- (generate);
+\draw[flow] (generate) -- (batch);
+\draw[flow] (batch.west) -- ++(-8mm,0) |- (ops.east);
+\draw[flow] (ops) -- (result);
+
+\begin{scope}[on background layer]
+    \node[group, fit=(query) (scan) (ops) (result)] (duckdbgroup) {};
+    \node[group, fit=(adapter)] (extgroup) {};
+    \node[group, fit=(generate) (batch)] (coregroup) {};
+\end{scope}
+
+\node[grouplabel, above=2mm of duckdbgroup.north] {DuckDB};
+\node[grouplabel, above=2mm of extgroup.north] {Расширение};
+\node[grouplabel, above=2mm of coregroup.north] {Schengen core};
+\end{tikzpicture}
+\end{document}

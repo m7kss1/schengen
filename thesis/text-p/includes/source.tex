@@ -1,0 +1,396 @@
+\section{Символическая запись на исходном языке}
+
+В настоящем разделе приводится символическая запись основных модулей программы,
+определяющих состав поддерживаемых таблиц, способы генерации типовых значений и
+порядок записи сформированных данных в выходные файлы.
+
+\subsection{Модуль регистрации таблиц}
+
+Ниже приведена символическая запись модуля, задающего состав таблиц,
+поддерживаемых программой, и связывающего их с соответствующими генераторами
+строк и схемами колонок.
+
+\begin{lstlisting}[caption={Регистрация таблиц генератора}]
+func register_tables():
+    registry.add("region",   region_schema,   region_generator)
+    registry.add("nation",   nation_schema,   nation_generator)
+    registry.add("supplier", supplier_schema, supplier_generator)
+    registry.add("part",     part_schema,     part_generator)
+    registry.add("partsupp", partsupp_schema, partsupp_generator)
+    registry.add("customer", customer_schema, customer_generator)
+    registry.add("orders",   orders_schema,   orders_generator)
+    registry.add("lineitem", lineitem_schema, lineitem_generator)
+\end{lstlisting}
+
+\subsection{Модуль генерации типовых значений}
+
+Ниже приведены символические записи основных компонентов модуля генерации
+типовых значений. Отдельно отражены генерация ограниченных числовых значений,
+выбор токенов из распределений, построение строковых представлений и
+преобразование дат TPC-H.
+
+\begin{lstlisting}[caption={Генерация ограниченных числовых значений}]
+func next_bounded_int(seed, lower_bound, upper_bound, values_per_row):
+    random = RowRandomInt(seed, values_per_row)
+    return random.next_int(lower_bound, upper_bound)
+
+
+func next_bounded_long(seed, lower_bound, upper_bound, values_per_row):
+    random = RowRandomLong(seed, values_per_row)
+    return random.next_long(lower_bound, upper_bound)
+
+
+func next_bounded_value(seed, lower_bound, upper_bound, scale_factor, values_per_row):
+    use_64bits = scale_factor >= 30000 or upper_bound > INT32_MAX
+
+    if use_64bits:
+        return next_bounded_long(seed, lower_bound, upper_bound, values_per_row)
+
+    return next_bounded_int(seed, lower_bound, upper_bound, values_per_row)
+
+
+func advance_rows(random, row_count):
+    random.advance_rows(row_count)
+
+
+func finish_row(random):
+    random.row_finished()
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Генерация строк из распределений}]
+func next_token(distribution, random):
+    sample = random.next_int(0, distribution.total_weight - 1)
+    cumulative = 0
+
+    for entry in distribution:
+        cumulative += entry.weight
+        if sample < cumulative:
+            return entry.token
+
+    return distribution.last.token
+
+
+func next_string(distribution, random):
+    return next_token(distribution, random)
+
+
+func next_string_sequence(distribution, count, random):
+    values = copy_all_tokens(distribution)
+
+    for current in range(0, count):
+        swap_with = random.next_int(current, len(values) - 1)
+        swap(values[current], values[swap_with])
+
+    return join_with_spaces(values[0:count])
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Генерация символьных и телефонных значений}]
+func next_alphanumeric(average_length, random):
+    length = random.next_int(0.4 * average_length, 1.6 * average_length)
+    text = ""
+
+    while len(text) < length:
+        chunk = random.next_int(0, INT32_MAX)
+        text += decode_base64_like_alphabet(chunk)
+
+    return text[0:length]
+
+
+func next_phone(nation_key, random):
+    country_code = 10 + (nation_key mod 90)
+    local1 = random.next_int(100, 999)
+    local2 = random.next_int(100, 999)
+    local3 = random.next_int(1000, 9999)
+    return format("%02d-%03d-%03d-%04d", country_code, local1, local2, local3)
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Преобразование дат TPC-H}]
+func to_unix_epoch(generated_date):
+    return (generated_date - MIN_GENERATE_DATE) + UNIX_EPOCH_OFFSET
+
+
+func is_in_past(generated_date):
+    return to_julian(generated_date) <= CURRENT_DATE
+
+
+func format_tpch_date(generated_date):
+    year, month, day = to_ymd(generated_date)
+    return format("%04d-%02d-%02d", year, month, day)
+\end{lstlisting}
+
+\subsection{Модуль формирования пула текста}
+
+Ниже приведена символическая запись модуля \texttt{TextPool}, используемого для
+построения текстовых атрибутов. Пул заполняется синтетическими предложениями,
+построенными по грамматическим шаблонам TPC-H, после чего генераторы таблиц
+через компонент \texttt{RandomText} берут из него подстроки без дополнительного
+конструирования текста для каждой строки.
+
+\begin{lstlisting}[caption={Формирование и использование TextPool}]
+func build_text_pool(target_size):
+    random = RowRandomInt(933588178, MAX_INT)
+    text = ""
+
+    while len(text) < target_size:
+        text += generate_sentence(random)
+
+    return text[0:target_size]
+
+
+func generate_sentence(random):
+    sentence = ""
+    syntax = next_token(grammar_distribution, random)
+
+    for symbol in syntax:
+        if symbol == "V":
+            sentence += generate_verb_phrase(random)
+        elif symbol == "N":
+            sentence += generate_noun_phrase(random)
+        elif symbol == "P":
+            sentence += next_token(prepositions, random) + " the "
+            sentence += generate_noun_phrase(random)
+        elif symbol == "T":
+            sentence = trim_trailing_space(sentence)
+            sentence += next_token(terminators, random)
+
+        sentence += " "
+
+    return sentence
+
+
+func next_text(text_pool, average_length, random):
+    min_length = 0.4 * average_length
+    max_length = 1.6 * average_length
+
+    offset = random.next_int(0, text_pool.size - max_length)
+    length = random.next_int(min_length, max_length)
+
+    /* (*@\texttt{Возврат представления}@*) */
+    return text_pool.view(offset, offset + length)
+\end{lstlisting}
+
+\subsection{Модуль выбора стратегии записи}
+
+Ниже приведена символическая запись модуля, определяющего способ записи
+сформированных данных. Для форматов \texttt{Parquet} и \texttt{ORC}
+поддерживаются стратегии \texttt{parallel-files} и
+\texttt{single-file-ordered}; для форматов \texttt{Lance} и \texttt{Vortex}
+используется только упорядоченная запись в один логический набор файлов.
+
+\begin{lstlisting}[caption={Выбор стратегии записи}]
+func generate_table_with_strategy(context, table, output, writer_options, format_driver, scheduler_options):
+    part_count = format_driver.resolve_part_count(table, context.scale, writer_options)
+    strategy = resolve_selected_write_strategy(scheduler_options, format_driver)
+
+    if strategy == "parallel-files":
+        return run_parallel_partition_files(
+            context, table, output, writer_options, format_driver, part_count
+        )
+
+    if format_driver.ordered_execution_model() == "native-multiplexed":
+        return run_native_multiplexed_ordered(
+            context, table, output, writer_options, format_driver, part_count
+        )
+
+    return run_foreign_streaming_ordered(
+        context, table, output, writer_options, format_driver, part_count
+    )
+
+
+func resolve_selected_write_strategy(options, format_driver):
+    if options.write_strategy == "auto":
+        strategy = format_driver.preferred_strategy()
+    else:
+        strategy = options.write_strategy
+
+    assert format_driver.supports_strategy(strategy)
+    return strategy
+\end{lstlisting}
+
+\subsection{Модуль записи в формат Parquet}
+
+Ниже приведена символическая запись модуля записи в формат \texttt{Parquet}. В
+зависимости от выбранной стратегии данные либо распределяются по нескольким
+файлам партиций, либо несколькими производителями готовятся параллельно и затем
+в порядке номеров партиций объединяются в один файл
+\texttt{table-1.parquet}.
+
+\begin{lstlisting}[caption={Запись таблицы в формат Parquet}]
+func parquet_parallel_partition_files(table, partition, batches, output, options):
+    path = output / table.name / format_parquet_partition_name(table, partition)
+    temp_path = path + ".tmp"
+
+    sink = open_output_stream(temp_path)
+    sink = maybe_buffer(sink, options.output_buffer_bytes)
+
+    writer = open_parquet_writer(
+        schema = table.schema,
+        compression = options.compression,
+        row_group_rows = resolve_row_group_rows(table, options),
+        use_threads = options.use_threads
+    )
+
+    for batch in batches:
+        writer.write_record_batch(batch)
+
+    writer.close()
+    sink.close()
+    move_file(temp_path, path)
+
+
+func parquet_single_file_ordered(table, output, options, part_count):
+    sink = open_single_output(output / table.name / (table.name + "-1.parquet"))
+    producers = spawn_partition_generators(part_count)
+    states = {}
+    expected_part = 1
+
+    while message = read_batch_message(producers):
+        states[message.part].append(message)
+
+        while states[expected_part].is_ready():
+            /* (*@\texttt{Партиция равна row group}@*) */
+            sink.begin_partition()
+
+            for batch in states[expected_part].batches:
+                sink.write_batch(batch)
+
+            sink.end_partition()
+            expected_part += 1
+
+    sink.close()
+\end{lstlisting}
+
+\subsection{Модуль записи в формат ORC}
+
+Ниже приведена символическая запись модуля записи в формат \texttt{ORC}. При
+стратегии \texttt{parallel-files} каждая партиция записывается в собственный
+файл, а при стратегии \texttt{single-file-ordered} батчи партиций
+последовательно направляются в единый ORC writer с сохранением порядка
+партиций.
+
+\begin{lstlisting}[caption={Запись таблицы в формат ORC}]
+func orc_parallel_partition_files(table, partition, batches, output, options):
+    path = output / table.name / format_orc_partition_name(table, partition)
+    temp_path = path + ".tmp"
+
+    sink = open_output_stream(temp_path)
+    sink = maybe_buffer(sink, options.output_buffer_bytes)
+
+    writer = open_orc_writer(
+        schema = table.schema,
+        compression = options.compression,
+        stripe_bytes = resolve_stripe_bytes(table, options)
+    )
+
+    for batch in batches:
+        writer.write(batch)
+
+    writer.close()
+    sink.close()
+    move_file(temp_path, path)
+
+
+func orc_single_file_ordered(table, output, options, part_count):
+    sink = open_single_output(output / table.name / (table.name + "-1.orc"))
+    producers = spawn_partition_generators(part_count)
+    states = {}
+    expected_part = 1
+
+    while message = read_batch_message(producers):
+        states[message.part].append(message)
+
+        while states[expected_part].is_ready():
+            /* (*@\texttt{Явного начала stripe нет}@*) */
+            sink.begin_partition()
+
+            for batch in states[expected_part].batches:
+                sink.write_batch(batch)
+
+            sink.end_partition()
+            expected_part += 1
+
+    sink.close()
+\end{lstlisting}
+
+\subsection{Модуль записи в формат Lance}
+
+Ниже приведена символическая запись модуля записи в формат \texttt{Lance}. Для
+данного формата используется только стратегия
+\texttt{single-file-ordered}: генератор последовательно подает партиции в
+упорядоченный writer, а фактическая запись набора данных выполняется через
+мост в реализацию на Rust.
+
+\begin{lstlisting}[caption={Запись таблицы в формат Lance}]
+func lance_single_file_ordered(table, output, options, part_count):
+    dataset_path = output / table.name / (table.name + "-1.lance")
+    schema = export_arrow_schema(table.schema)
+    bridge_options = build_lance_bridge_options(options)
+
+    /* (*@\texttt{Вызов Rust FFI}@*) */
+    handle = lance_writer_open(dataset_path, schema, bridge_options)
+
+    for part in range(1, part_count + 1):
+        /* (*@\texttt{Вызов Rust FFI}@*) */
+        lance_writer_begin_partition(handle, part, part_count)
+
+        for batch in generate_partition_batches(table, part):
+            if batch.row_count == 0:
+                continue
+
+            arrow_batch = export_record_batch(batch)
+
+            /* (*@\texttt{Вызов Rust FFI}@*) */
+            lance_writer_push_batch(handle, arrow_batch)
+
+        /* (*@\texttt{Вызов Rust FFI}@*) */
+        lance_writer_end_partition(handle)
+
+    /* (*@\texttt{Вызов Rust FFI}@*) */
+    lance_writer_finish(handle)
+    lance_writer_destroy(handle)
+\end{lstlisting}
+
+\subsection{Модуль записи в формат Vortex}
+
+Ниже приведена символическая запись модуля записи в формат \texttt{Vortex}. Как
+и в случае \texttt{Lance}, запись выполняется только в режиме
+\texttt{single-file-ordered}; сериализация батчей и финализация файла
+осуществляются через мост в реализацию на Rust.
+
+\begin{lstlisting}[caption={Запись таблицы в формат Vortex}]
+func vortex_single_file_ordered(table, output, options, part_count):
+    file_path = output / table.name / (table.name + "-1.vortex")
+    schema = export_arrow_schema(table.schema)
+    bridge_options = build_vortex_bridge_options(options)
+    wrote_non_empty_batch = false
+
+    /* (*@\texttt{Вызов Rust FFI}@*) */
+    handle = vortex_writer_open(file_path, schema, bridge_options)
+
+    for part in range(1, part_count + 1):
+        /* (*@\texttt{Вызов Rust FFI}@*) */
+        vortex_writer_begin_partition(handle, part, part_count)
+
+        for batch in generate_partition_batches(table, part):
+            if batch.row_count == 0:
+                continue
+
+            arrow_batch = export_record_batch(batch)
+
+            /* (*@\texttt{Вызов Rust FFI}@*) */
+            vortex_writer_push_batch(handle, arrow_batch)
+            wrote_non_empty_batch = true
+
+        /* (*@\texttt{Вызов Rust FFI}@*) */
+        vortex_writer_end_partition(handle)
+
+    if not wrote_non_empty_batch:
+        empty_batch = make_empty_record_batch(table.schema)
+
+        /* (*@\texttt{Вызов Rust FFI}@*) */
+        vortex_writer_push_batch(handle, export_record_batch(empty_batch))
+
+    /* (*@\texttt{Вызов Rust FFI}@*) */
+    vortex_writer_finish(handle)
+    vortex_writer_destroy(handle)
+\end{lstlisting}

@@ -1,0 +1,35 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage[active,tightpage]{preview}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\PreviewEnvironment{tikzpicture}
+\setlength{\PreviewBorder}{4pt}
+\pagestyle{empty}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=10mm and 10mm,
+    box/.style={draw, rounded corners, align=center, minimum width=38mm, minimum height=10mm},
+    arrow/.style={-{Stealth[length=2.2mm]}, thick}
+]
+\node[box] (grammar) {Грамматические\\шаблоны TPC-H};
+\node[box, right=of grammar] (sentences) {Построение\\предложений};
+\node[box, right=of sentences] (pool) {Текстовый\\пул};
+\node[box, below=of pool] (slice) {Выбор смещения\\и длины};
+\node[box, left=of slice] (fragment) {Фрагмент текста\\для атрибута};
+\node[box, below=of fragment] (bbb) {Преобразование \texttt{BBB}\\при необходимости};
+\node[box, right=of bbb] (row) {Передача значения\\в строку таблицы};
+
+\draw[arrow] (grammar) -- (sentences);
+\draw[arrow] (sentences) -- (pool);
+\draw[arrow] (pool) -- (slice);
+\draw[arrow] (slice) -- (fragment);
+\draw[arrow] (fragment) -- (bbb);
+\draw[arrow] (bbb) -- (row);
+\end{tikzpicture}
+\end{document}

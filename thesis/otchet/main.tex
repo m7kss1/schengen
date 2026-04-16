@@ -1,0 +1,142 @@
+\documentclass{includes/Thesis}
+
+\addbibresource{parts/refs.bib}
+\usepackage{float}
+\usepackage{placeins}
+\usetikzlibrary{arrows.meta,backgrounds,fit,positioning}
+
+\definecolor{listingbg}{gray}{0.96}
+\definecolor{listingkw}{RGB}{0,74,140}
+\definecolor{listingtype}{RGB}{120,78,0}
+\definecolor{listingconst}{RGB}{90,40,120}
+\definecolor{listingcomment}{RGB}{0,120,60}
+\definecolor{listingstring}{RGB}{163,21,21}
+\renewcommand{\lstlistingname}{Листинг}
+\DeclareCaptionLabelSeparator{hyphen}{ - }
+\captionsetup{labelsep=hyphen}
+\emergencystretch=2em
+
+\let\oldtexttt\texttt
+\renewcommand{\texttt}[1]{\mbox{\oldtexttt{#1}}}
+\newcounter{appendixlstbase}
+
+\lstdefinelanguage{PseudoPy}{
+    language=Python,
+    morekeywords={
+        func,emit,return,copy,spawn_partition_generators,
+        generate_sentence,resolve_selected_write_strategy,
+        generate_partition_batches,build_text_pool,
+        export_record_batch,register_views,deliver_batches,
+        buffer_message,flush_ready_partitions,
+        next_token,generate_verb_phrase,generate_noun_phrase,
+        trim_trailing_space
+    },
+    morekeywords=[2]{
+        TextPool,RowRandomInt,RowRandomLong,
+        RandomBoundedInt,RandomBoundedLong,
+        RandomText,TableBatch,ArrowArrayStream,
+        RecordBatch,GenerationContext
+    },
+    morekeywords=[3]{
+        INT32_MAX,LINE_COUNT_MAX,TEXT_POOL_SIZE
+    },
+    morecomment=[s]{/*}{*/},
+    sensitive=true
+}
+
+\lstdefinelanguage{DistsDSS}{
+    morekeywords={BEGIN,END,COUNT,begin,end,count},
+    sensitive=false,
+    morecomment=[l]{\#}
+}
+
+\lstdefinestyle{reportlisting}{
+    style=reportlistinginline
+}
+
+\lstdefinestyle{reportlistinginline}{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    keepspaces=true,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{black},
+    backgroundcolor=\color{listingbg},
+    framesep=6pt,
+    captionpos=b,
+    aboveskip=6pt,
+    belowskip=10pt,
+    numbers=none
+}
+
+\lstdefinestyle{reportpseudocode}{
+    style=reportlisting,
+    language=PseudoPy,
+    keywordstyle=\color{listingkw}\bfseries,
+    keywordstyle=[2]\color{listingtype}\bfseries,
+    keywordstyle=[3]\color{listingconst}\bfseries,
+    commentstyle=\color{listingcomment}\itshape,
+    stringstyle=\color{listingstring}
+}
+
+\lstdefinestyle{reportpseudocodeinline}{
+    style=reportlistinginline,
+    language=PseudoPy,
+    keywordstyle=\color{listingkw}\bfseries,
+    keywordstyle=[2]\color{listingtype}\bfseries,
+    keywordstyle=[3]\color{listingconst}\bfseries,
+    commentstyle=\color{listingcomment}\itshape,
+    stringstyle=\color{listingstring}
+}
+
+\lstdefinestyle{reportdss}{
+    style=reportlisting,
+    language=DistsDSS,
+    keywordstyle=\color{listingkw}\bfseries,
+    commentstyle=\color{listingcomment}\itshape,
+    stringstyle=\color{listingstring}
+}
+
+\begin{thesis}[
+    title = Генератор данных для аналитического бенчмарка СУБД TPC-H,
+    year = 2026,
+    %
+    authorGroup = БПИ225,
+    authorName = М. А. Дергоусов,
+    %
+    academicTeacherTitle = {профессор департамента программной инженерии ФКН НИУ ВШЭ},
+    academicTeacherName = В. В. Шилов,
+    academicSupervisorTitle = {Академический руководитель\\образовательной программы\\<<Программная инженерия>>},
+    academicSupervisorName = Н. А. Павлочев,
+    %
+    UDC = 004.65,
+    %
+    hasConsultant,
+    consultantTitle = {разработчик Яндекс Технологии},
+    consultantName = М. Т. Садуллаев,
+    %
+    keywordsRu = OLAP; СУБД; TPC-H; Apache Arrow; Parquet; ORC; DuckDB,
+    keywordsEn = OLAP; DBMS; TPC-H; Apache Arrow; Parquet; ORC; DuckDB,
+]
+    \setAbstractResource{parts/abstract-ru}{parts/abstract-en}
+
+    \setTerminologyResource{parts/terminology}
+
+    \setIntroResource{parts/intro}
+
+    \addChapter{Предметная область и анализ аналогов}{parts/chapter1}
+    \addChapter{Архитектура генератора данных}{parts/chapter2}
+    \addChapter{Реализация генератора данных}{parts/chapter3}
+    \addAppendix{Генератор таблицы region}{parts/appendix-a}
+    \addAppendix{Генератор таблицы nation}{parts/appendix-b}
+    \addAppendix{Генератор таблицы supplier}{parts/appendix-c}
+    \addAppendix{Генератор таблицы part}{parts/appendix-d}
+    \addAppendix{Генератор таблицы partsupp}{parts/appendix-e}
+    \addAppendix{Генератор таблицы customer}{parts/appendix-f}
+    \addAppendix{Генератор таблицы orders}{parts/appendix-g}
+    \addAppendix{Генератор таблицы lineitem}{parts/appendix-h}
+
+    \setConclusionResource{parts/conclusion}
+\end{thesis}

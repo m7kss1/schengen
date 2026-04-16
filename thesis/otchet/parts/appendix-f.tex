@@ -1,0 +1,35 @@
+\setcounter{appendixlstbase}{\value{lstlisting}}
+\renewcommand{\thelstlisting}{\Asbuk{appendicesnum}.\number\numexpr\value{lstlisting}-\value{appendixlstbase}\relax}
+\label{appendix:customer}
+
+В приложении приведена символическая запись генератора таблицы
+customer.
+
+\begin{lstlisting}[style=reportpseudocode,caption={Формирование таблицы customer},label={lst:app-customer}]
+func generate_customer(partition_range, text_pool):
+    address_random = RandomAlphaNumeric(address_seed, average_address_length)
+    nation_random = RandomBoundedInt(nation_seed, 0, NATION_COUNT - 1)
+    phone_random = RandomPhoneNumber(phone_seed)
+    acctbal_random = RandomBoundedInt(acctbal_seed, acctbal_min, acctbal_max)
+    segment_random = RandomString(segment_seed, market_segment_distribution)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        customer_key = row_id + 1
+        nation_key = nation_random.next_value()
+
+        emit CustomerRow(
+            custkey = customer_key,
+            name = format("Customer#%09d", customer_key),
+            address = address_random.next_value(),
+            nationkey = nation_key,
+            phone = phone_random.next_value(nation_key),
+            acctbal = acctbal_random.next_value() / 100.0,
+            mktsegment = segment_random.next_value(),
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

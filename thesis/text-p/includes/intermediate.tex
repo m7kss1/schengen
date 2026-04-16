@@ -1,0 +1,338 @@
+\section{Символическая запись алгоритмов формирования таблиц}
+
+В настоящем разделе приводится символическая запись алгоритмов генерации
+таблиц бенчмарка TPC-H. Для каждой таблицы отражены правила формирования ключей,
+способы вычисления зависимых атрибутов и использование детерминированных
+последовательностей случайных значений.
+
+\subsection{Формирование таблицы region}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{region}. Таблица имеет фиксированный размер, а ее названия берутся из
+предопределенного справочника; случайным образом формируются только
+текстовые комментарии.
+
+\begin{lstlisting}[caption={Формирование таблицы region}]
+func generate_region(partition_range, text_pool):
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+    advance_randoms(comment_random, partition_range.start_row)
+
+    end_row = min(partition_range.end_row, REGION_COUNT)
+
+    for row_id in range(partition_range.start_row, end_row):
+        emit RegionRow(
+            regionkey = row_id,
+            name = region_names[row_id],
+            comment = comment_random.next_value()
+        )
+
+        comment_random.row_finished()
+\end{lstlisting}
+
+\subsection{Формирование таблицы nation}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{nation}. Наименование государства берется из предопределенного набора, а
+ссылка на регион вычисляется по накопленной сумме весов, заданных в
+справочнике наций.
+
+\begin{lstlisting}[caption={Формирование таблицы nation}]
+func generate_nation(partition_range, text_pool):
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+    region_cum_sum = sum(nations[i].weight for i in range(0, partition_range.start_row))
+
+    advance_randoms(comment_random, partition_range.start_row)
+    end_row = min(partition_range.end_row, NATION_COUNT)
+
+    for row_id in range(partition_range.start_row, end_row):
+        nation = nations[row_id]
+        region_cum_sum += nation.weight
+
+        emit NationRow(
+            nationkey = row_id,
+            name = nation.name,
+            regionkey = region_cum_sum,
+            comment = comment_random.next_value()
+        )
+
+        comment_random.row_finished()
+\end{lstlisting}
+
+\subsection{Формирование таблицы supplier}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{supplier}. Имя поставщика строится по ключу, адрес и финансовые поля
+генерируются случайным образом, а в комментарий при выполнении условия может
+встраиваться специальная подстрока, соответствующая шаблону жалобы или
+рекомендации клиента.
+
+\begin{lstlisting}[caption={Формирование таблицы supplier}]
+func generate_supplier(partition_range, text_pool):
+    address_random = RandomAlphaNumeric(address_seed, average_address_length)
+    nation_random = RandomBoundedInt(nation_seed, 0, NATION_COUNT - 1)
+    phone_random = RandomPhoneNumber(phone_seed)
+    acctbal_random = RandomBoundedInt(acctbal_seed, acctbal_min, acctbal_max)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+    bbb_gate_random = RandomBoundedInt(bbb_seed, 1, SCALE_BASE)
+    bbb_junk_random = RowRandomInt(bbb_junk_seed, 1)
+    bbb_offset_random = RowRandomInt(bbb_offset_seed, 1)
+    bbb_type_random = RandomBoundedInt(bbb_type_seed, 0, 100)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        supplier_key = row_id + 1
+        nation_key = nation_random.next_value()
+        comment = copy(comment_random.next_value())
+
+        if bbb_gate_random.next_value() <= BBB_COMMENTS_PER_SCALE_BASE:
+            comment = apply_bbb_comment(comment, bbb_junk_random, bbb_offset_random, bbb_type_random)
+
+        emit SupplierRow(
+            suppkey = supplier_key,
+            name = format("Supplier#%09d", supplier_key),
+            address = address_random.next_value(),
+            nationkey = nation_key,
+            phone = phone_random.next_value(nation_key),
+            acctbal = acctbal_random.next_value() / 100.0,
+            comment = comment
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\subsection{Формирование таблицы part}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{part}. Имя детали составляется из перестановки токенов словаря, а
+производитель, бренд, тип, размер, контейнер и цена вычисляются
+детерминированным образом из комбинации случайных величин и ключа детали.
+
+\begin{lstlisting}[caption={Формирование таблицы part}]
+func generate_part(partition_range, text_pool):
+    name_random = RandomStringSequence(name_seed, NAME_WORDS, color_distribution)
+    manufacturer_random = RandomBoundedInt(mfgr_seed, mfgr_min, mfgr_max)
+    brand_random = RandomBoundedInt(brand_seed, brand_min, brand_max)
+    type_random = RandomString(type_seed, part_type_distribution)
+    size_random = RandomBoundedInt(size_seed, size_min, size_max)
+    container_random = RandomString(container_seed, container_distribution)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        part_key = row_id + 1
+        mfgr_key = manufacturer_random.next_value()
+        brand_key = mfgr_key * 10 + brand_random.next_value()
+
+        emit PartRow(
+            partkey = part_key,
+            name = name_random.next_value(),
+            mfgr = format("Manufacturer#%d", mfgr_key),
+            brand = format("Brand#%d", brand_key),
+            type = type_random.next_value(),
+            size = size_random.next_value(),
+            container = container_random.next_value(),
+            retailprice = calculate_part_price(part_key) / 100.0,
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\subsection{Формирование таблицы partsupp}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{partsupp}. Для каждой детали формируются четыре строки, соответствующие
+четырем поставщикам; ключ поставщика вычисляется детерминированным отображением
+от пары \texttt{(partkey, supplier\_number)}.
+
+\begin{lstlisting}[caption={Формирование таблицы partsupp}]
+func generate_partsupp(partition_range, scale_factor, text_pool):
+    availqty_random = RandomBoundedInt(availqty_seed, availqty_min, availqty_max, 4)
+    supplycost_random = RandomBoundedInt(supplycost_seed, supplycost_min, supplycost_max, 4)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length, 4)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for part_row in range(partition_range.start_row, partition_range.end_row):
+        part_key = part_row + 1
+
+        for supplier_number in range(0, 4):
+            supplier_key = select_part_supplier(part_key, supplier_number, scale_factor)
+
+            emit PartSuppRow(
+                partkey = part_key,
+                suppkey = supplier_key,
+                availqty = availqty_random.next_value(),
+                supplycost = supplycost_random.next_value() / 100.0,
+                comment = comment_random.next_value()
+            )
+
+        /* (*@\texttt{4 поставщика на деталь}@*) */
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\subsection{Формирование таблицы customer}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{customer}. Алгоритм близок к алгоритму формирования поставщиков, однако
+вместо специальных модификаций комментариев используется выбор рыночного
+сегмента из предопределенного распределения.
+
+\begin{lstlisting}[caption={Формирование таблицы customer}]
+func generate_customer(partition_range, text_pool):
+    address_random = RandomAlphaNumeric(address_seed, average_address_length)
+    nation_random = RandomBoundedInt(nation_seed, 0, NATION_COUNT - 1)
+    phone_random = RandomPhoneNumber(phone_seed)
+    acctbal_random = RandomBoundedInt(acctbal_seed, acctbal_min, acctbal_max)
+    segment_random = RandomString(segment_seed, market_segment_distribution)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        customer_key = row_id + 1
+        nation_key = nation_random.next_value()
+
+        emit CustomerRow(
+            custkey = customer_key,
+            name = format("Customer#%09d", customer_key),
+            address = address_random.next_value(),
+            nationkey = nation_key,
+            phone = phone_random.next_value(nation_key),
+            acctbal = acctbal_random.next_value() / 100.0,
+            mktsegment = segment_random.next_value(),
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\subsection{Формирование таблицы orders}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{orders}. Ключ заказа строится по разреженной схеме TPC-H, ключ клиента
+выбирается с учетом пропуска ``мертвых'' клиентов, а итоговая стоимость и статус
+заказа вычисляются на основе моделирования всех строк будущей таблицы
+\texttt{lineitem} для данного заказа.
+
+\begin{lstlisting}[caption={Формирование таблицы orders}]
+func generate_orders(partition_range, scale_factor, text_pool):
+    order_date_random = RandomBoundedInt(order_date_seed, order_date_min, order_date_max)
+    line_count_random = RandomBoundedInt(line_count_seed, line_count_min, line_count_max)
+    customer_random = next_bounded_value(customer_seed, 1, max_customer_key(scale_factor), scale_factor, 1)
+    priority_random = RandomString(priority_seed, order_priority_distribution)
+    clerk_random = RandomBoundedInt(clerk_seed, 1, max_clerk(scale_factor))
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length)
+
+    quantity_random = RandomBoundedInt(quantity_seed, quantity_min, quantity_max, LINE_COUNT_MAX)
+    discount_random = RandomBoundedInt(discount_seed, discount_min, discount_max, LINE_COUNT_MAX)
+    tax_random = RandomBoundedInt(tax_seed, tax_min, tax_max, LINE_COUNT_MAX)
+    part_random = next_bounded_value(part_seed, 1, max_part_key(scale_factor), scale_factor, LINE_COUNT_MAX)
+    ship_date_random = RandomBoundedInt(ship_date_seed, ship_date_min, ship_date_max, LINE_COUNT_MAX)
+
+    advance_all_randoms_to(partition_range.start_row)
+
+    for row_id in range(partition_range.start_row, partition_range.end_row):
+        order_index = row_id + 1
+        order_key = make_sparse_order_key(order_index)
+        order_date = order_date_random.next_value()
+        customer_key = adjust_customer_key(customer_random.next_value(), max_customer_key(scale_factor))
+
+        total_price = 0
+        shipped_count = 0
+        line_count = line_count_random.next_value()
+
+        for line_number in range(1, line_count + 1):
+            quantity = quantity_random.next_value()
+            discount = discount_random.next_value()
+            tax = tax_random.next_value()
+            part_key = part_random.next_value()
+            ship_date = order_date + ship_date_random.next_value()
+
+            total_price += calculate_line_total(part_key, quantity, discount, tax)
+            if is_in_past(ship_date):
+                shipped_count += 1
+
+        emit OrderRow(
+            orderkey = order_key,
+            custkey = customer_key,
+            orderstatus = derive_order_status(shipped_count, line_count),
+            totalprice = total_price / 100.0,
+            orderdate = order_date,
+            orderpriority = priority_random.next_value(),
+            clerk = format("Clerk#%09d", clerk_random.next_value()),
+            shippriority = 0,
+            comment = comment_random.next_value()
+        )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}
+
+\subsection{Формирование таблицы lineitem}
+
+Ниже приведена символическая запись алгоритма формирования таблицы
+\texttt{lineitem}. Партиционирование выполняется по диапазонам заказов; для
+каждого заказа регенерируются дата заказа и число позиций, после чего
+последовательно формируются строки поставок с согласованными ключами детали,
+поставщика и временными атрибутами.
+
+\begin{lstlisting}[caption={Формирование таблицы lineitem}]
+func generate_lineitem(order_partition, scale_factor, text_pool):
+    order_date_random = RandomBoundedInt(order_date_seed, order_date_min, order_date_max)
+    line_count_random = RandomBoundedInt(line_count_seed, line_count_min, line_count_max)
+    quantity_random = RandomBoundedInt(quantity_seed, quantity_min, quantity_max, LINE_COUNT_MAX)
+    discount_random = RandomBoundedInt(discount_seed, discount_min, discount_max, LINE_COUNT_MAX)
+    tax_random = RandomBoundedInt(tax_seed, tax_min, tax_max, LINE_COUNT_MAX)
+    part_random = next_bounded_value(part_seed, 1, max_part_key(scale_factor), scale_factor, LINE_COUNT_MAX)
+    supplier_number_random = RandomBoundedInt(supplier_number_seed, 0, 3, LINE_COUNT_MAX)
+    ship_date_random = RandomBoundedInt(ship_date_seed, ship_date_min, ship_date_max, LINE_COUNT_MAX)
+    commit_date_random = RandomBoundedInt(commit_date_seed, commit_date_min, commit_date_max, LINE_COUNT_MAX)
+    receipt_date_random = RandomBoundedInt(receipt_date_seed, receipt_date_min, receipt_date_max, LINE_COUNT_MAX)
+    return_flag_random = RandomString(return_flag_seed, return_flag_distribution, LINE_COUNT_MAX)
+    ship_instruct_random = RandomString(ship_instruct_seed, ship_instruct_distribution, LINE_COUNT_MAX)
+    ship_mode_random = RandomString(ship_mode_seed, ship_mode_distribution, LINE_COUNT_MAX)
+    comment_random = RandomText(comment_seed, text_pool, average_comment_length, LINE_COUNT_MAX)
+
+    advance_all_randoms_to(order_partition.start_row)
+
+    for order_row in range(order_partition.start_row, order_partition.end_row):
+        order_index = order_row + 1
+        order_key = make_sparse_order_key(order_index)
+        order_date = order_date_random.next_value()
+        line_count = line_count_random.next_value()
+
+        for line_number in range(1, line_count + 1):
+            part_key = part_random.next_value()
+            supplier_number = supplier_number_random.next_value()
+            supplier_key = select_part_supplier(part_key, supplier_number, scale_factor)
+            quantity = quantity_random.next_value()
+            discount = discount_random.next_value()
+            tax = tax_random.next_value()
+
+            ship_date = order_date + ship_date_random.next_value()
+            commit_date = order_date + commit_date_random.next_value()
+            receipt_date = ship_date + receipt_date_random.next_value()
+
+            emit LineitemRow(
+                orderkey = order_key,
+                partkey = part_key,
+                suppkey = supplier_key,
+                linenumber = line_number,
+                quantity = quantity,
+                extendedprice = calculate_part_price(part_key) * quantity / 100.0,
+                discount = discount / 100.0,
+                tax = tax / 100.0,
+                returnflag = derive_return_flag(receipt_date, return_flag_random),
+                linestatus = derive_line_status(ship_date),
+                shipdate = ship_date,
+                commitdate = commit_date,
+                receiptdate = receipt_date,
+                shipinstruct = ship_instruct_random.next_value(),
+                shipmode = ship_mode_random.next_value(),
+                comment = comment_random.next_value()
+            )
+
+        finish_all_randoms_for_row()
+\end{lstlisting}

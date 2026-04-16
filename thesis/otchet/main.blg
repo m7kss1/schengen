@@ -1,0 +1,19 @@
+[0] Config.pm:307> INFO - This is Biber 2.19
+[0] Config.pm:310> INFO - Logfile is 'main.blg'
+[126] biber:340> INFO - === Wed Apr  8, 2026, 07:31:10
+[151] Biber.pm:419> INFO - Reading 'main.bcf'
+[320] Biber.pm:979> INFO - Found 14 citekeys in bib section 0
+[354] Biber.pm:4419> INFO - Processing section 0
+[369] Biber.pm:4610> INFO - Looking for bibtex file 'parts/refs.bib' for section 0
+[371] bibtex.pm:1713> INFO - LaTeX decoding ...
+[394] bibtex.pm:1519> INFO - Found BibTeX data source 'parts/refs.bib'
+[488] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[488] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'variable = shifted' with 'variable = non-ignorable'
+[488] Biber.pm:4239> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'ru-RU'
+[488] Biber.pm:4245> INFO - No sort tailoring available for locale 'ru-RU'
+[517] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[518] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'variable = shifted' with 'variable = non-ignorable'
+[518] Biber.pm:4239> INFO - Sorting list 'nty/global//global/global' of type 'entry' with template 'nty' and locale 'ru-RU'
+[518] Biber.pm:4245> INFO - No sort tailoring available for locale 'ru-RU'
+[542] bbl.pm:660> INFO - Writing 'main.bbl' with encoding 'UTF-8'
+[551] bbl.pm:763> INFO - Output to main.bbl
