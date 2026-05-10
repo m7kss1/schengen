@@ -70,8 +70,8 @@ set(ARROW_BUILD_INTEGRATION OFF CACHE BOOL "Disable Arrow integration builds" FO
 set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "Disable Arrow CLI utilities" FORCE)
 set(ARROW_INSTALL OFF CACHE BOOL "Disable Arrow install/export targets" FORCE)
 set(ARROW_COMPUTE ON CACHE BOOL "" FORCE)
-set(ARROW_SIMD_LEVEL "NONE" CACHE STRING "Disable Arrow SIMD to ease portability" FORCE)
-set(ARROW_RUNTIME_SIMD_LEVEL "NONE" CACHE STRING "Disable runtime SIMD dispatch" FORCE)
+set(ARROW_SIMD_LEVEL "AVX2" CACHE STRING "Use AVX2 by default, runtime dispatch selects higher SIMD levels if available")
+set(ARROW_RUNTIME_SIMD_LEVEL "MAX" CACHE STRING "Enable runtime SIMD dispatch to use AVX-512 or other extensions if available")
 set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install rules for embedded Arrow" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Build bundled dependencies with -fPIC" FORCE)
 
