@@ -15,10 +15,12 @@ use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::{SinkExt, StreamExt};
 use object_store::aws::AmazonS3Builder;
 use object_store::azure::MicrosoftAzureBuilder;
+use object_store::client::SpawnedReqwestConnector;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectStorePath;
 use object_store::{ObjectStore, ObjectStoreScheme};
+use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime as TokioRuntime};
 use url::Url;
 use vortex::VortexSessionDefault;
 use vortex::array::ArrayRef;
@@ -49,13 +51,13 @@ pub struct VortexFileInfoC {
 }
 
 static LAST_ERROR: OnceLock<Mutex<CString>> = OnceLock::new();
+static TOKIO_RUNTIME: OnceLock<TokioRuntime> = OnceLock::new();
 
 enum OutputTarget {
     Local(PathBuf),
     ObjectStore {
         url: Url,
         path: ObjectStorePath,
-        store: Arc<dyn ObjectStore>,
     },
 }
 
@@ -192,12 +194,34 @@ fn parse_writer_options(options: *const VortexWriterOptionsC) -> Result<WriterCo
     })
 }
 
+fn tokio_runtime() -> Result<&'static TokioRuntime, String> {
+    if let Some(runtime) = TOKIO_RUNTIME.get() {
+        return Ok(runtime);
+    }
+
+    let runtime = TokioRuntimeBuilder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| err.to_string())?;
+
+    let _ = TOKIO_RUNTIME.set(runtime);
+    TOKIO_RUNTIME
+        .get()
+        .ok_or_else(|| "failed to initialize Tokio runtime".to_string())
+}
+
+fn spawned_reqwest_connector() -> Result<SpawnedReqwestConnector, String> {
+    Ok(SpawnedReqwestConnector::new(tokio_runtime()?.handle().clone()))
+}
+
 fn make_object_store(url: &Url) -> Result<Arc<dyn ObjectStore>, String> {
     let (scheme, _) = ObjectStoreScheme::parse(url).map_err(|err| err.to_string())?;
     match scheme {
         ObjectStoreScheme::Local => Ok(Arc::new(LocalFileSystem::default())),
         ObjectStoreScheme::AmazonS3 => {
-            let mut builder = AmazonS3Builder::from_env().with_url(url.to_string());
+            let mut builder = AmazonS3Builder::from_env()
+                .with_http_connector(spawned_reqwest_connector()?)
+                .with_url(url.to_string());
             if let Some(bucket) = url.domain() {
                 builder = builder.with_bucket_name(bucket);
             }
@@ -207,11 +231,13 @@ fn make_object_store(url: &Url) -> Result<Arc<dyn ObjectStore>, String> {
                 .map_err(|err| err.to_string())
         }
         ObjectStoreScheme::MicrosoftAzure => MicrosoftAzureBuilder::new()
+            .with_http_connector(spawned_reqwest_connector()?)
             .with_url(url.to_string())
             .build()
             .map(|store| Arc::new(store) as Arc<dyn ObjectStore>)
             .map_err(|err| err.to_string()),
         ObjectStoreScheme::GoogleCloudStorage => GoogleCloudStorageBuilder::new()
+            .with_http_connector(spawned_reqwest_connector()?)
             .with_url(url.to_string())
             .build()
             .map(|store| Arc::new(store) as Arc<dyn ObjectStore>)
@@ -231,8 +257,7 @@ fn resolve_target(uri: &str) -> Result<OutputTarget, String> {
             } else {
                 let path = ObjectStorePath::from_url_path(url.path())
                     .map_err(|_| format!("invalid object store path: {}", url.path()))?;
-                let store = make_object_store(&url)?;
-                Ok(OutputTarget::ObjectStore { url, path, store })
+                Ok(OutputTarget::ObjectStore { url, path })
             }
         }
         Err(url::ParseError::RelativeUrlWithoutBase) => Ok(OutputTarget::Local(PathBuf::from(uri))),
@@ -253,9 +278,10 @@ fn ensure_create_target(target: &OutputTarget) -> Result<(), String> {
             }
             Ok(())
         }
-        OutputTarget::ObjectStore { path, store, .. } => {
+        OutputTarget::ObjectStore { url, path } => {
             let runtime = CurrentThreadRuntime::new();
             runtime.block_on(async {
+                let store = make_object_store(url)?;
                 match store.head(path).await {
                     Ok(_) => Err(format!("file already exists: {path}")),
                     Err(object_store::Error::NotFound { .. }) => Ok(()),
@@ -304,7 +330,8 @@ fn write_batches(
                     .await
                     .map_err(|err| err.to_string())?;
             }
-            OutputTarget::ObjectStore { store, path, .. } => {
+            OutputTarget::ObjectStore { url, path } => {
+                let store = make_object_store(&url)?;
                 let mut writer = ObjectStoreWrite::new(store, &path)
                     .await
                     .map_err(|err| err.to_string())?;
@@ -333,11 +360,14 @@ fn inspect_target(target: OutputTarget) -> Result<(i64, String), String> {
                 .open_path(path.as_path())
                 .await
                 .map_err(|err| err.to_string())?,
-            OutputTarget::ObjectStore { url, store, .. } => session
+            OutputTarget::ObjectStore { url, .. } => {
+                let store = make_object_store(&url)?;
+                session
                 .open_options()
                 .open_object_store(&store, url.path())
                 .await
-                .map_err(|err| err.to_string())?,
+                .map_err(|err| err.to_string())?
+            }
         };
 
         let row_count = i64::try_from(file.row_count()).map_err(|err| err.to_string())?;

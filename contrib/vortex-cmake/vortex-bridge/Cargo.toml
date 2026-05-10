@@ -13,5 +13,6 @@ arrow-schema = "57.1"
 async-fs = "2.2.0"
 futures = "0.3.31"
 object_store = { version = "0.12.4", default-features = false, features = ["aws", "azure", "gcp"] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "time"] }
 url = "2.5.7"
 vortex = { path = "../../vortex/vortex", features = ["object_store"] }

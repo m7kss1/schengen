@@ -15,3 +15,5 @@ bool IsObsUri(std::string_view uri);
 bool HasUriScheme(std::string_view uri);
 
 arrow::Result<FileSystemPtr> ResolveTarget(std::string_view uri);
+
+arrow::Status FinalizeStorageBackends();
