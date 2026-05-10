@@ -129,10 +129,18 @@ else ()
   set(Snappy_SOURCE "AUTO" CACHE STRING "Autodetect Snappy source" FORCE)
 endif ()
 if (_schengen_enable_orc)
-  set(Protobuf_SOURCE "AUTO" CACHE STRING "Autodetect Protobuf source for ORC support" FORCE)
-  set(lz4_SOURCE "AUTO" CACHE STRING "Autodetect LZ4 source for ORC support" FORCE)
-  set(zstd_SOURCE "AUTO" CACHE STRING "Autodetect ZSTD source for ORC support" FORCE)
-  set(orc_SOURCE "AUTO" CACHE STRING "Autodetect ORC source for ORC support" FORCE)
+  set(Protobuf_SOURCE "BUNDLED" CACHE STRING "Use bundled Protobuf for ORC support" FORCE)
+  set(lz4_SOURCE "BUNDLED" CACHE STRING "Use bundled LZ4 for ORC support" FORCE)
+  set(zstd_SOURCE "BUNDLED" CACHE STRING "Use bundled ZSTD for ORC support" FORCE)
+  set(orc_SOURCE "BUNDLED" CACHE STRING "Use bundled ORC support" FORCE)
+
+  # Arrow builds ORC and Protobuf through FetchContent on recent CMake.
+  # Protobuf's optional zlib link leaks the local _zlib target into its
+  # build-tree export, and ORC's z-prefix probe cannot serialize the
+  # ZLIB::ZLIB alias into try_compile. Neither feature is needed for
+  # Schengen's ORC writer path.
+  set(protobuf_WITH_ZLIB OFF CACHE BOOL "Disable zlib support in bundled Protobuf" FORCE)
+  set(NEEDS_Z_PREFIX OFF CACHE BOOL "Bundled zlib does not use z-prefixed symbols" FORCE)
 endif ()
 if (_schengen_enable_s3)
   set(AWSSDK_SOURCE "SYSTEM" CACHE STRING "Use bundled AWS SDK" FORCE)

@@ -1,5 +1,6 @@
 #include "Common/registry.h"
 #include "Storage/progress.h"
+#include "Storage/storage.h"
 #include "Storage/write_scheduler.h"
 #include "Storage/writer.h"
 #include "Tables/register_tables.h"
@@ -9,11 +10,14 @@
 
 #include <boost/program_options.hpp>
 
+#include <cctype>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
 #include <unistd.h>
 #include <vector>
 
@@ -63,6 +67,65 @@ std::string JoinStrings(const std::vector<std::string> & values, std::string_vie
     return out;
 }
 
+std::string ToLower(std::string value)
+{
+    for (auto & ch : value)
+    {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return value;
+}
+
+std::string Trim(std::string_view value)
+{
+    const auto begin = value.find_first_not_of(" \t\n\r");
+    if (begin == std::string_view::npos)
+    {
+        return {};
+    }
+    const auto end = value.find_last_not_of(" \t\n\r");
+    return std::string(value.substr(begin, end - begin + 1));
+}
+
+std::vector<std::string> SplitFormatSpec(std::string_view format_spec)
+{
+    std::vector<std::string> formats;
+    std::size_t begin = 0;
+    while (begin <= format_spec.size())
+    {
+        const auto end = format_spec.find(',', begin);
+        const auto token = end == std::string_view::npos ? format_spec.substr(begin) : format_spec.substr(begin, end - begin);
+        auto format = ToLower(Trim(token));
+        if (!format.empty())
+        {
+            formats.emplace_back(std::move(format));
+        }
+        if (end == std::string_view::npos)
+        {
+            break;
+        }
+        begin = end + 1;
+    }
+    return formats;
+}
+
+std::string JoinOutputPath(const std::string & base, std::string_view leaf)
+{
+    if (base.empty())
+    {
+        return std::string(leaf);
+    }
+    if (leaf.empty())
+    {
+        return base;
+    }
+    if (base.back() == '/')
+    {
+        return base + std::string(leaf);
+    }
+    return base + "/" + std::string(leaf);
+}
+
 void PrintFormatList()
 {
     for (const auto & name : SupportedFormatNames())
@@ -75,18 +138,76 @@ yaclib::FutureOn<int> LaunchTableTask(
     yaclib::IExecutor & table_executor,
     GenerationContext ctx,
     const TableMetadata & table,
-    const OutputLocation & output,
-    const WriterOptions & writer_options,
+    OutputLocation output,
+    WriterOptions writer_options,
     const IFormatDriver * format_driver,
     const WriteSchedulerOptions & scheduler_options,
     yaclib::IExecutor & part_executor)
 {
     return yaclib::Run(
         table_executor,
-        [ctx, &table, &output, &writer_options, format_driver, &scheduler_options, &part_executor]() mutable {
+        [ctx, &table, output = std::move(output), writer_options = std::move(writer_options), format_driver, &scheduler_options, &part_executor]() mutable {
             return GenerateTableWithStrategy(
                 ctx, table, output, writer_options, *format_driver, scheduler_options, part_executor);
         });
+}
+
+struct FormatSelection
+{
+    std::string name;
+    const IFormatDriver * driver = nullptr;
+    WriterOptions writer_options;
+    OutputLocation output;
+};
+
+arrow::Result<std::vector<FormatSelection>> BuildFormatSelections(
+    const std::string & format_spec,
+    const std::string & output_path,
+    const po::variables_map & vm)
+{
+    auto requested_formats = SplitFormatSpec(format_spec);
+    if (requested_formats.empty())
+    {
+        return arrow::Status::Invalid("output-format must not be empty");
+    }
+    if (requested_formats.size() == 1 && requested_formats.front() == "all")
+    {
+        requested_formats = SupportedFormatNames();
+    }
+
+    const bool multi_format = requested_formats.size() > 1;
+    std::unordered_set<std::string> seen;
+    std::vector<FormatSelection> selections;
+    selections.reserve(requested_formats.size());
+    for (const auto & format_name : requested_formats)
+    {
+        if (format_name == "all")
+        {
+            return arrow::Status::Invalid("output-format=all cannot be mixed with explicit format names");
+        }
+        if (!seen.insert(format_name).second)
+        {
+            continue;
+        }
+
+        ARROW_ASSIGN_OR_RAISE(const IFormatDriver * driver, ResolveFormatDriver(format_name));
+        ARROW_ASSIGN_OR_RAISE(WriterOptions writer_options, driver->BuildWriterOptions(vm));
+
+        OutputLocation output;
+        output.uri = multi_format ? JoinOutputPath(output_path, driver->Name()) : output_path;
+        selections.push_back(FormatSelection{
+            .name = std::string(driver->Name()),
+            .driver = driver,
+            .writer_options = std::move(writer_options),
+            .output = std::move(output),
+        });
+    }
+
+    if (selections.empty())
+    {
+        return arrow::Status::Invalid("No output formats selected");
+    }
+    return selections;
 }
 }
 
@@ -104,7 +225,7 @@ int main(int argc, char ** argv)
     const std::string supported_formats_text = JoinStrings(supported_formats, ", ");
     const std::string output_format_help = supported_formats.empty()
                                                ? "Set tables output format"
-                                               : "Set tables output format (" + supported_formats_text + ")";
+                                               : "Set tables output format (" + supported_formats_text + "; comma-separated list or all)";
 
     po::options_description desc("Allowed options");
     desc.add_options()("help", "Help message")("list-tables", "List available tables")("list-formats", "List available formats")(
@@ -170,21 +291,13 @@ int main(int argc, char ** argv)
         tables = DefaultTableNames();
     }
 
-    auto format_driver_result = ResolveFormatDriver(output_format);
-    if (!format_driver_result.ok())
+    auto format_selections_result = BuildFormatSelections(output_format, output_path, vm);
+    if (!format_selections_result.ok())
     {
-        std::cerr << format_driver_result.status().ToString() << "\n";
+        std::cerr << "Invalid output format: " << format_selections_result.status().ToString() << "\n";
         return 2;
     }
-    const IFormatDriver * format_driver = std::move(format_driver_result).ValueOrDie();
-
-    auto writer_options_result = format_driver->BuildWriterOptions(vm);
-    if (!writer_options_result.ok())
-    {
-        std::cerr << "Invalid writer options: " << writer_options_result.status().ToString() << "\n";
-        return 2;
-    }
-    WriterOptions writer_options = std::move(writer_options_result).ValueOrDie();
+    auto format_selections = std::move(format_selections_result).ValueOrDie();
 
     auto scheduler_options_result = BuildWriteSchedulerOptions(vm);
     if (!scheduler_options_result.ok())
@@ -203,8 +316,6 @@ int main(int argc, char ** argv)
     const CliVerbosity verbosity = std::move(verbosity_result).ValueOrDie();
 
     const ScaleConfig scale{.factor = scale_factor};
-    const OutputLocation output{.uri = output_path};
-
     arrow::MemoryPool * pool = arrow::default_memory_pool();
     static const TextPool & text_pool = TextPool::Default();
     auto table_executor = yaclib::MakeFairThreadPool();
@@ -239,13 +350,17 @@ int main(int argc, char ** argv)
     if (verbosity == CliVerbosity::Verbose)
     {
         std::vector<CliProgressTable> progress_tables;
-        progress_tables.reserve(selected_tables.size());
-        for (const auto * metadata : selected_tables)
+        progress_tables.reserve(selected_tables.size() * format_selections.size());
+        for (const auto & format : format_selections)
         {
-            progress_tables.push_back(CliProgressTable{
-                .table_name = metadata->name,
-                .total_rows = scale.RowCount(*metadata),
-            });
+            for (const auto * metadata : selected_tables)
+            {
+                const auto table_label = format_selections.size() == 1 ? metadata->name : format.name + "/" + metadata->name;
+                progress_tables.push_back(CliProgressTable{
+                    .table_name = table_label,
+                    .total_rows = scale.RowCount(*metadata),
+                });
+            }
         }
 
         CliProgressControllerOptions progress_options;
@@ -256,21 +371,25 @@ int main(int argc, char ** argv)
     }
 
     std::vector<yaclib::FutureOn<int>> table_futures;
-    table_futures.reserve(selected_tables.size());
-    for (std::size_t table_index = 0; table_index < selected_tables.size(); ++table_index)
+    table_futures.reserve(selected_tables.size() * format_selections.size());
+    for (std::size_t format_index = 0; format_index < format_selections.size(); ++format_index)
     {
-        GenerationContext table_ctx = ctx;
-        table_ctx.progress = progress_controller.get();
-        table_ctx.progress_table_index = table_index;
-        table_futures.emplace_back(LaunchTableTask(
-            *table_executor,
-            table_ctx,
-            *selected_tables[table_index],
-            output,
-            writer_options,
-            format_driver,
-            scheduler_options,
-            *part_executor));
+        const auto & format = format_selections[format_index];
+        for (std::size_t table_index = 0; table_index < selected_tables.size(); ++table_index)
+        {
+            GenerationContext table_ctx = ctx;
+            table_ctx.progress = progress_controller.get();
+            table_ctx.progress_table_index = format_index * selected_tables.size() + table_index;
+            table_futures.emplace_back(LaunchTableTask(
+                *table_executor,
+                table_ctx,
+                *selected_tables[table_index],
+                format.output,
+                format.writer_options,
+                format.driver,
+                scheduler_options,
+                *part_executor));
+        }
     }
 
     int exit_code = 0;
@@ -304,6 +423,16 @@ int main(int argc, char ** argv)
     table_executor->Wait();
     part_executor->SoftStop();
     part_executor->Wait();
+
+    const auto finalize_status = FinalizeStorageBackends();
+    if (!finalize_status.ok())
+    {
+        std::cerr << "Failed to finalize storage backends: " << finalize_status.ToString() << "\n";
+        if (exit_code == 0)
+        {
+            exit_code = 2;
+        }
+    }
 
     return exit_code;
 }

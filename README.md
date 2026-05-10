@@ -22,6 +22,29 @@ docker run --rm \
   --output-path /data
 ```
 
+## Build from source
+
+Initialize submodules before configuring the build. The command is idempotent and can be re-run after checkout:
+
+```bash
+git submodule update --init --recursive
+```
+
+Then configure and build:
+
+```bash
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=... \
+  -DENABLE_PARQUET=ON \
+  -DENABLE_ORC=ON \
+  -DENABLE_LANCE=ON \
+  -DENABLE_VORTEX=ON
+
+cmake --build build --target schengen_main
+```
+
+All bundled dependencies are built from `contrib` submodules. Use `--output-format all` or a comma-separated list such as `--output-format parquet,orc,lance,vortex` to generate several formats in one run; multi-format output is written under per-format subdirectories. For S3-compatible storage, pass an `s3://bucket/prefix` `--output-path` and configure AWS credentials/endpoint through the usual `AWS_*` environment variables
+
 ## CLI parameters
 
 ### General parameters
@@ -32,7 +55,7 @@ docker run --rm \
 | `--list-tables` | - | Print the list of available `TPC-H` tables |
 | `--list-formats` | - | Print the list of supported output formats |
 | `--scale-factor <value>` | `1` | Set the dataset scale factor |
-| `--output-format <name>` | `parquet` | Select the output format: `parquet`, `orc`, `lance`, `vortex` |
+| `--output-format <name>` | `parquet` | Select the output format: `parquet`, `orc`, `lance`, `vortex`; comma-separated lists and `all` are supported |
 | `--output-path <path-or-uri>` | `.` | Set the output directory or target URI |
 | `--table <name...>` | all tables | Select one or more tables, `all` is also supported |
 | `--batch-rows <count>` | `131072` | Number of rows per generated batch |
