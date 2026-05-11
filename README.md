@@ -24,6 +24,29 @@ docker run --rm \
 
 ## Build from source
 
+### Prerequisites
+
+```bash
+sudo apt-get install -y \
+  libssl-dev \
+  libcurl4-openssl-dev \
+  libre2-dev \
+  zlib1g-dev \
+  libboost-program-options-dev \
+  protobuf-compiler \
+  libprotobuf-dev \
+  libclang-dev 
+```
+
+Alternatively, build inside Docker to avoid managing host dependencies:
+
+```bash
+git submodule update --init --recursive
+docker build -t schengen .
+docker run --rm -v "$(pwd)/data:/data" schengen \
+  --output-format parquet --output-path /data
+```
+
 Initialize submodules before configuring the build. The command is idempotent and can be re-run after checkout:
 
 ```bash

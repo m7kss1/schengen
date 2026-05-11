@@ -123,6 +123,7 @@ set(ARROW_WITH_LZ4 ${_schengen_arrow_with_lz4} CACHE BOOL "Enable LZ4 codec in A
 set(ARROW_WITH_ZSTD ${_schengen_arrow_with_zstd} CACHE BOOL "Enable ZSTD codec in Arrow" FORCE)
 set(ARROW_WITH_PROTOBUF ${_schengen_arrow_with_protobuf} CACHE BOOL "Enable Protobuf in Arrow" FORCE)
 
+set(xsimd_SOURCE "BUNDLED" CACHE STRING "Use Arrow-bundled xsimd to avoid system version incompatibility" FORCE)
 if (ENABLE_SNAPPY)
   set(Snappy_SOURCE "SYSTEM" CACHE STRING "Use in-tree snappy" FORCE)
 else ()
