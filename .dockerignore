@@ -1,0 +1,15 @@
+build/
+build-*/
+
+**/target/
+
+.git/
+
+.idea/
+.vscode/
+*.swp
+*.swo
+
+.docker/
+
+.DS_Store
