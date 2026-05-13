@@ -3,6 +3,11 @@
 #include "Storage/progress.h"
 #include "Storage/orc_writer.h"
 #include "Storage/parquet_writer.h"
+#if defined(ARROW_PARQUET)
+#  include "arrow/io/memory.h"
+#  include "generated/parquet_types.h"
+#  include "parquet/thrift_internal.h"
+#endif
 #include <boost/program_options.hpp>
 #include <arrow/io/buffered.h>
 
@@ -11,6 +16,7 @@
 #include "yaclib_std/atomic"
 #include "yaclib_std/condition_variable"
 #include "yaclib_std/mutex"
+#include "yaclib_std/thread"
 
 #include <algorithm>
 #include <cctype>
@@ -291,6 +297,30 @@ private:
 };
 } // namespace detail
 
+enum class BatchMessageKind : std::uint8_t
+{
+    Batch,
+    EndPartition,
+    Error,
+};
+
+struct BatchMessage
+{
+    BatchMessageKind kind = BatchMessageKind::Batch;
+    std::int32_t part = 1;
+    TableBatch batch;
+    std::string error;
+};
+
+#if defined(ARROW_PARQUET)
+struct InMemoryPartitionData
+{
+    std::int32_t part = 0;
+    std::shared_ptr<arrow::Buffer> buffer;
+    std::string error;
+};
+#endif
+
 int GeneratePartitionToOwnFile(
     const GenerationContext & ctx,
     const TableMetadata & table,
@@ -338,25 +368,110 @@ int GeneratePartitionToOwnFile(
         gen_ctx.pool = ctx.pool;
         generator->Reset(gen_ctx);
 
-        TableBatch batch;
-        while (generator->NextBatch(ctx.batch_rows, &batch))
+        /*
+         * SPSC pipeline: generator runs on a dedicated yaclib_std::thread,
+         * writer runs in the current thread. Capacity = 2 lets the
+         * writer encode/compress one batch while the next is being
+         * generated, hiding either stage when both are CPU-bound.
+         *
+         * A dedicated thread is used (not yaclib::Run on part_executor)
+         * to avoid a deadlock risk: callers of GeneratePartitionToOwnFile
+         * are typically RunParallelPartitionFiles workers already occupying
+         * the part_executor pool. Spawning the producer on the same pool
+         * could starve when all pool threads block on Pop awaiting a
+         * queued producer that never gets a runner. yaclib_std::thread
+         * is the same idiom used by CliProgressController::render_thread_.
+         */
+        constexpr std::size_t kPipelineCapacity = 2;
+        detail::BoundedMpscQueue<BatchMessage> pipeline_queue(kPipelineCapacity);
+        yaclib_std::atomic<bool> stop_requested{false};
+
+        yaclib_std::thread producer_thread([&]() {
+            try
+            {
+                while (!stop_requested.load(std::memory_order_acquire))
+                {
+                    TableBatch batch;
+                    if (!generator->NextBatch(ctx.batch_rows, &batch))
+                    {
+                        break;
+                    }
+                    BatchMessage msg;
+                    msg.kind = BatchMessageKind::Batch;
+                    msg.part = part;
+                    msg.batch = std::move(batch);
+                    if (!pipeline_queue.Push(std::move(msg)))
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (const std::exception & ex)
+            {
+                BatchMessage err;
+                err.kind = BatchMessageKind::Error;
+                err.part = part;
+                err.error = ex.what();
+                (void)pipeline_queue.Push(std::move(err));
+            }
+            catch (...)
+            {
+                BatchMessage err;
+                err.kind = BatchMessageKind::Error;
+                err.part = part;
+                err.error = "Unknown generation error";
+                (void)pipeline_queue.Push(std::move(err));
+            }
+            pipeline_queue.Close();
+        });
+
+        std::string pipeline_error;
+        BatchMessage msg;
+        while (pipeline_queue.Pop(&msg))
         {
-            const auto write_status = writer->WriteBatch(batch);
+            if (msg.kind == BatchMessageKind::Error)
+            {
+                if (pipeline_error.empty())
+                {
+                    pipeline_error = msg.error;
+                }
+                stop_requested.store(true, std::memory_order_release);
+                pipeline_queue.Close();
+                continue;
+            }
+            if (stop_requested.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+            const auto write_status = writer->WriteBatch(msg.batch);
             if (!write_status.ok())
             {
-                std::ostringstream message;
-                message << "Failed to write partition " << part << "/" << part_count << " for table " << table.name << ": "
-                        << write_status.ToString();
-                ReportError(ctx, message.str());
-                const auto cleanup_status = writer->ClosePartition();
-                partition_open = false;
-                if (!cleanup_status.ok())
+                if (pipeline_error.empty())
                 {
-                    ReportError(ctx, "Partition cleanup failed for table " + table.name + ": " + cleanup_status.ToString());
+                    pipeline_error = write_status.ToString();
                 }
-                return 2;
+                stop_requested.store(true, std::memory_order_release);
+                pipeline_queue.Close();
+                continue;
             }
-            AddCommittedRows(ctx, batch.row_count);
+            AddCommittedRows(ctx, msg.batch.row_count);
+        }
+
+        producer_thread.join();
+
+        if (!pipeline_error.empty())
+        {
+            std::ostringstream message;
+            message << "Failed to write partition " << part << "/" << part_count << " for table " << table.name << ": "
+                    << pipeline_error;
+            ReportError(ctx, message.str());
+            const auto cleanup_status = writer->ClosePartition();
+            partition_open = false;
+            if (!cleanup_status.ok())
+            {
+                ReportError(ctx, "Partition cleanup failed for table " + table.name + ": " + cleanup_status.ToString());
+            }
+            return 2;
         }
 
         const auto close_status = writer->ClosePartition();
@@ -396,6 +511,130 @@ int GeneratePartitionToOwnFile(
     }
     return 2;
 }
+
+#if defined(ARROW_PARQUET)
+arrow::Result<std::shared_ptr<arrow::Buffer>> GeneratePartitionToInMemory(
+    const GenerationContext & ctx,
+    const TableMetadata & table,
+    const ParquetWriterOptions & options,
+    std::int32_t part,
+    std::int32_t part_count)
+{
+    ARROW_ASSIGN_OR_RAISE(auto buf_stream, arrow::io::BufferOutputStream::Create(0, ctx.pool));
+
+    auto props_builder = ::parquet::WriterProperties::Builder();
+    props_builder.compression(options.compression);
+    const auto row_group_rows = ParquetTableWriter::ResolveRowGroupRows(table, options);
+    if (row_group_rows > 0)
+        props_builder.max_row_group_length(row_group_rows);
+    auto arrow_props = ::parquet::ArrowWriterProperties::Builder().set_use_threads(false)->build();
+
+    ARROW_ASSIGN_OR_RAISE(
+        auto writer,
+        ::parquet::arrow::FileWriter::Open(
+            *table.schema, ctx.pool, buf_stream, props_builder.build(), std::move(arrow_props)));
+
+    auto generator = ctx.registry->CreateGenerator(table.name, ctx.pool);
+    if (!generator)
+        return arrow::Status::ExecutionError("Failed to create generator for table: " + table.name);
+
+    GeneratorContext gen_ctx;
+    gen_ctx.scale = *ctx.scale;
+    gen_ctx.partition = MakePartitionPlan(table, *ctx.scale, part, part_count);
+    gen_ctx.text_pool = ctx.text_pool;
+    gen_ctx.pool = ctx.pool;
+    generator->Reset(gen_ctx);
+
+    constexpr std::size_t kPipelineCapacity = 2;
+    detail::BoundedMpscQueue<BatchMessage> pipeline_queue(kPipelineCapacity);
+    yaclib_std::atomic<bool> stop_requested{false};
+
+    yaclib_std::thread producer_thread([&]() {
+        try
+        {
+            while (!stop_requested.load(std::memory_order_acquire))
+            {
+                TableBatch batch;
+                if (!generator->NextBatch(ctx.batch_rows, &batch))
+                    break;
+                BatchMessage msg;
+                msg.kind = BatchMessageKind::Batch;
+                msg.part = part;
+                msg.batch = std::move(batch);
+                if (!pipeline_queue.Push(std::move(msg)))
+                    break;
+            }
+        }
+        catch (const std::exception & ex)
+        {
+            BatchMessage err;
+            err.kind = BatchMessageKind::Error;
+            err.part = part;
+            err.error = ex.what();
+            (void)pipeline_queue.Push(std::move(err));
+        }
+        catch (...)
+        {
+            BatchMessage err;
+            err.kind = BatchMessageKind::Error;
+            err.part = part;
+            err.error = "Unknown generation error";
+            (void)pipeline_queue.Push(std::move(err));
+        }
+        pipeline_queue.Close();
+    });
+
+    std::string pipeline_error;
+    bool row_group_open = false;
+    BatchMessage msg;
+    while (pipeline_queue.Pop(&msg))
+    {
+        if (msg.kind == BatchMessageKind::Error)
+        {
+            if (pipeline_error.empty())
+                pipeline_error = msg.error;
+            stop_requested.store(true, std::memory_order_release);
+            pipeline_queue.Close();
+            continue;
+        }
+        if (stop_requested.load(std::memory_order_acquire))
+            continue;
+
+        if (!row_group_open)
+        {
+            const auto rg_status = writer->NewBufferedRowGroup();
+            if (!rg_status.ok())
+            {
+                if (pipeline_error.empty())
+                    pipeline_error = rg_status.ToString();
+                stop_requested.store(true, std::memory_order_release);
+                pipeline_queue.Close();
+                continue;
+            }
+            row_group_open = true;
+        }
+
+        const auto row_count = static_cast<std::int64_t>(msg.batch.row_count);
+        auto rb = arrow::RecordBatch::Make(table.schema, row_count, msg.batch.columns);
+        const auto write_status = writer->WriteRecordBatch(*rb);
+        if (!write_status.ok())
+        {
+            if (pipeline_error.empty())
+                pipeline_error = write_status.ToString();
+            stop_requested.store(true, std::memory_order_release);
+            pipeline_queue.Close();
+        }
+    }
+
+    producer_thread.join();
+
+    if (!pipeline_error.empty())
+        return arrow::Status::ExecutionError(pipeline_error);
+
+    RETURN_NOT_OK(writer->Close());
+    return buf_stream->Finish();
+}
+#endif
 
 int RunParallelPartitionFiles(
     const GenerationContext & ctx,
@@ -803,20 +1042,287 @@ arrow::Result<std::unique_ptr<ISingleFileSink>> OpenSingleFileSink(
                 "single-file-ordered strategy is currently supported for parquet and orc formats");
     }
 }
-enum class BatchMessageKind : std::uint8_t
-{
-    Batch,
-    EndPartition,
-    Error,
-};
 
-struct BatchMessage
+#if defined(ARROW_PARQUET)
+int RunParallelEncodeParquetOrdered(
+    const GenerationContext & ctx,
+    const TableMetadata & table,
+    const OutputLocation & output,
+    const ParquetWriterOptions & options,
+    std::int32_t part_count,
+    const WriteSchedulerOptions & scheduler_options,
+    yaclib::IExecutor & part_executor)
 {
-    BatchMessageKind kind = BatchMessageKind::Batch;
-    std::int32_t part = 1;
-    TableBatch batch;
-    std::string error;
-};
+    auto fail = [&](const std::string & message) -> int {
+        ReportError(ctx, "parallel-encode-parquet write failed for table " + table.name + ": " + message);
+        return 2;
+    };
+
+    auto fs_result = ParquetTableWriter::GetFilesystem(output.uri);
+    if (!fs_result.ok())
+        return fail(fs_result.status().ToString());
+    auto fs = std::move(fs_result).ValueOrDie();
+
+    auto base_dir_result = ParquetTableWriter::GetPath(output.uri, *fs);
+    if (!base_dir_result.ok())
+        return fail(base_dir_result.status().ToString());
+    const auto base_dir = std::move(base_dir_result).ValueOrDie();
+
+    const auto table_dir = JoinPath(base_dir, table.name);
+    const auto create_status = fs->CreateDir(table_dir, /*recursive=*/true);
+    if (!create_status.ok())
+        return fail(create_status.ToString());
+
+    const auto final_path = JoinPath(table_dir, table.name + "-1.parquet");
+    const auto temp_path = final_path + ".tmp";
+
+    const auto info_result = fs->GetFileInfo(final_path);
+    if (info_result.ok() && info_result.ValueOrDie().type() != arrow::fs::FileType::NotFound)
+    {
+        ReportError(ctx, final_path + " already exists, skipping generation");
+        return 0;
+    }
+
+    auto open_result = fs->OpenOutputStream(temp_path);
+    if (!open_result.ok())
+        return fail(open_result.status().ToString());
+    std::shared_ptr<arrow::io::OutputStream> sink = std::move(open_result).ValueOrDie();
+
+    if (options.output_buffer_bytes > 0)
+    {
+        auto buf_result = arrow::io::BufferedOutputStream::Create(options.output_buffer_bytes, ctx.pool, sink);
+        if (!buf_result.ok())
+            return fail(buf_result.status().ToString());
+        sink = std::move(buf_result).ValueOrDie();
+    }
+
+    // Parallel encode: each partition independently encodes to an in-memory Parquet mini-file.
+    // The consumer merges them in order by adjusting column offsets and concatenating the row
+    // group data, then writes a single merged Thrift footer.
+    detail::PartitionRangeQueue partition_queue(part_count);
+    const auto worker_count = ResolveWorkerCount(scheduler_options.worker_count, part_count);
+    detail::BoundedMpscQueue<InMemoryPartitionData> result_queue(worker_count);
+    yaclib_std::atomic<bool> stop_requested{false};
+    yaclib_std::atomic<int> remaining_workers{static_cast<int>(worker_count)};
+
+    std::vector<yaclib::FutureOn<void>> worker_futures;
+    worker_futures.reserve(worker_count);
+    for (std::uint32_t w = 0; w < worker_count; ++w)
+    {
+        worker_futures.emplace_back(yaclib::Run(part_executor, [&]() {
+            std::int32_t part = 0;
+            while (!stop_requested.load(std::memory_order_acquire) && partition_queue.Pop(&part))
+            {
+                InMemoryPartitionData result;
+                result.part = part;
+                auto buf_result = GeneratePartitionToInMemory(ctx, table, options, part, part_count);
+                if (!buf_result.ok())
+                {
+                    result.error = buf_result.status().ToString();
+                    stop_requested.store(true, std::memory_order_release);
+                }
+                else
+                {
+                    result.buffer = std::move(buf_result).ValueOrDie();
+                }
+                if (!result_queue.Push(std::move(result)))
+                    break;
+            }
+            if (remaining_workers.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                result_queue.Close();
+        }));
+    }
+
+    // Consumer: collect results in arrival order, process them in partition order.
+    // Column offsets in each mini-file are relative to that file's beginning (offset 4 after
+    // the PAR1 magic). We adjust them by delta = cumulative row-group-data size written so far.
+    static constexpr uint8_t kParquetMagic[4] = {'P', 'A', 'R', '1'};
+    std::string pipeline_error;
+
+    {
+        const auto ws = sink->Write(kParquetMagic, 4);
+        if (!ws.ok())
+            pipeline_error = ws.ToString();
+    }
+
+    parquet::format::FileMetaData merged_metadata;
+    merged_metadata.num_rows = 0;
+    bool schema_set = false;
+    std::int64_t current_output_data_offset = 0;
+    ::parquet::ThriftDeserializer deserializer(
+        std::numeric_limits<std::int32_t>::max(), std::numeric_limits<std::int32_t>::max());
+
+    auto process_buffer = [&](const std::shared_ptr<arrow::Buffer> & buffer, std::int32_t part_num) {
+        if (!pipeline_error.empty())
+            return;
+        const std::int64_t file_size = buffer->size();
+        const uint8_t * data = buffer->data();
+
+        const uint8_t * footer_suffix = data + file_size - 8;
+        const auto footer_len = static_cast<std::uint32_t>(footer_suffix[0])
+            | (static_cast<std::uint32_t>(footer_suffix[1]) << 8)
+            | (static_cast<std::uint32_t>(footer_suffix[2]) << 16)
+            | (static_cast<std::uint32_t>(footer_suffix[3]) << 24);
+        const std::int64_t footer_start = file_size - 8 - static_cast<std::int64_t>(footer_len);
+        const std::int64_t row_group_data_size = footer_start - 4;
+
+        ::parquet::format::FileMetaData file_meta;
+        std::uint32_t meta_len = footer_len;
+        try
+        {
+            deserializer.DeserializeMessage(data + footer_start, &meta_len, &file_meta);
+        }
+        catch (const std::exception & ex)
+        {
+            pipeline_error = "footer deserialization failed for partition "
+                + std::to_string(part_num) + ": " + ex.what();
+            return;
+        }
+
+        if (!schema_set)
+        {
+            merged_metadata.version = file_meta.version;
+            merged_metadata.schema = file_meta.schema;
+            if (file_meta.__isset.created_by)
+                merged_metadata.__set_created_by(file_meta.created_by);
+            schema_set = true;
+        }
+
+        // Shift all absolute file offsets by delta (= bytes written to output data section so far).
+        const std::int64_t delta = current_output_data_offset;
+        for (auto & rg : file_meta.row_groups)
+        {
+            for (auto & col : rg.columns)
+            {
+                if (col.__isset.meta_data)
+                {
+                    auto & md = col.meta_data;
+                    md.__set_data_page_offset(md.data_page_offset + delta);
+                    if (md.__isset.index_page_offset)
+                        md.__set_index_page_offset(md.index_page_offset + delta);
+                    if (md.__isset.dictionary_page_offset)
+                        md.__set_dictionary_page_offset(md.dictionary_page_offset + delta);
+                    if (md.__isset.bloom_filter_offset)
+                        md.__set_bloom_filter_offset(md.bloom_filter_offset + delta);
+                }
+                if (col.__isset.offset_index_offset)
+                    col.__set_offset_index_offset(col.offset_index_offset + delta);
+                if (col.__isset.column_index_offset)
+                    col.__set_column_index_offset(col.column_index_offset + delta);
+            }
+            if (rg.__isset.file_offset)
+                rg.__set_file_offset(rg.file_offset + delta);
+            merged_metadata.num_rows += rg.num_rows;
+            merged_metadata.row_groups.push_back(std::move(rg));
+        }
+
+        if (row_group_data_size > 0)
+        {
+            const auto ws = sink->Write(data + 4, row_group_data_size);
+            if (!ws.ok())
+            {
+                pipeline_error = ws.ToString();
+                return;
+            }
+            current_output_data_offset += row_group_data_size;
+        }
+        AddCommittedRows(ctx, file_meta.num_rows);
+        MarkPartCompleted(ctx);
+    };
+
+    std::unordered_map<std::int32_t, InMemoryPartitionData> pending;
+    std::int32_t expected_part = 1;
+
+    InMemoryPartitionData result;
+    while (result_queue.Pop(&result))
+    {
+        pending[result.part] = std::move(result);
+
+        while (expected_part <= part_count && pipeline_error.empty())
+        {
+            auto it = pending.find(expected_part);
+            if (it == pending.end())
+                break;
+
+            if (!it->second.error.empty())
+                pipeline_error = "partition " + std::to_string(expected_part) + " failed: " + it->second.error;
+            else if (it->second.buffer)
+                process_buffer(it->second.buffer, expected_part);
+
+            pending.erase(it);
+            ++expected_part;
+        }
+
+        if (!pipeline_error.empty())
+        {
+            stop_requested.store(true, std::memory_order_release);
+            partition_queue.Close();
+            result_queue.Close();
+            break;
+        }
+    }
+
+    for (auto & future : worker_futures)
+    {
+        try
+        {
+            (void)std::move(future).Get().Ok();
+        }
+        catch (...)
+        {
+            if (pipeline_error.empty())
+                pipeline_error = "worker task threw exception";
+        }
+    }
+
+    if (!pipeline_error.empty())
+    {
+        (void)sink->Abort();
+        (void)fs->DeleteFile(temp_path);
+        return fail(pipeline_error);
+    }
+
+    if (expected_part != part_count + 1)
+        return fail("not all partitions completed");
+
+    // Serialize merged Parquet footer and write the file trailer.
+    ::parquet::ThriftSerializer serializer;
+    std::uint32_t serialized_len = 0;
+    std::uint8_t * serialized_buf = nullptr;
+    serializer.SerializeToBuffer(&merged_metadata, &serialized_len, &serialized_buf);
+
+    {
+        const auto ws = sink->Write(serialized_buf, serialized_len);
+        if (!ws.ok())
+            return fail(ws.ToString());
+    }
+    {
+        const std::uint8_t footer_len_bytes[4] = {
+            static_cast<std::uint8_t>(serialized_len & 0xFF),
+            static_cast<std::uint8_t>((serialized_len >> 8) & 0xFF),
+            static_cast<std::uint8_t>((serialized_len >> 16) & 0xFF),
+            static_cast<std::uint8_t>((serialized_len >> 24) & 0xFF)};
+        const auto ws = sink->Write(footer_len_bytes, 4);
+        if (!ws.ok())
+            return fail(ws.ToString());
+    }
+    {
+        const auto ws = sink->Write(kParquetMagic, 4);
+        if (!ws.ok())
+            return fail(ws.ToString());
+    }
+
+    const auto close_status = sink->Close();
+    if (!close_status.ok())
+        return fail(close_status.ToString());
+
+    const auto move_status = fs->Move(temp_path, final_path);
+    if (!move_status.ok())
+        return fail(move_status.ToString());
+
+    return 0;
+}
+#endif
 
 int RunNativeMultiplexedOrdered(
     const GenerationContext & ctx,
@@ -828,6 +1334,13 @@ int RunNativeMultiplexedOrdered(
     const WriteSchedulerOptions & scheduler_options,
     yaclib::IExecutor & part_executor)
 {
+#if defined(ARROW_PARQUET)
+    if (writer_options.format == OutputFormat::Parquet)
+    {
+        const auto & parquet_opts = ParquetTableWriter::ResolveOptions(writer_options);
+        return RunParallelEncodeParquetOrdered(ctx, table, output, parquet_opts, part_count, scheduler_options, part_executor);
+    }
+#endif
     auto writer = format_driver.CreateOrderedWriter();
     std::unique_ptr<ISingleFileSink> sink;
     const bool use_sink_fallback = writer == nullptr;
