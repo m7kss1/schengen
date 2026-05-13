@@ -10,6 +10,7 @@
 
 #include <boost/program_options.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <iostream>
@@ -134,24 +135,6 @@ void PrintFormatList()
     }
 }
 
-yaclib::FutureOn<int> LaunchTableTask(
-    yaclib::IExecutor & table_executor,
-    GenerationContext ctx,
-    const TableMetadata & table,
-    OutputLocation output,
-    WriterOptions writer_options,
-    const IFormatDriver * format_driver,
-    const WriteSchedulerOptions & scheduler_options,
-    yaclib::IExecutor & part_executor)
-{
-    return yaclib::Run(
-        table_executor,
-        [ctx, &table, output = std::move(output), writer_options = std::move(writer_options), format_driver, &scheduler_options, &part_executor]() mutable {
-            return GenerateTableWithStrategy(
-                ctx, table, output, writer_options, *format_driver, scheduler_options, part_executor);
-        });
-}
-
 struct FormatSelection
 {
     std::string name;
@@ -208,6 +191,36 @@ arrow::Result<std::vector<FormatSelection>> BuildFormatSelections(
         return arrow::Status::Invalid("No output formats selected");
     }
     return selections;
+}
+
+/*
+ * Two-pool design: table_executor holds one future per table (orchestration);
+ * part_executor runs partition workers and per-partition pipeline producers.
+ * Keeping the pools separate avoids deadlock: table futures block on Get()
+ * while waiting for partition workers, so they must not share a pool with
+ * those workers.
+ */
+yaclib::FutureOn<int> LaunchTableTask(
+    yaclib::IExecutor & table_executor,
+    GenerationContext ctx,
+    const TableMetadata & table,
+    OutputLocation output,
+    WriterOptions writer_options,
+    const IFormatDriver * format_driver,
+    WriteSchedulerOptions scheduler_options,
+    yaclib::IExecutor & part_executor)
+{
+    return yaclib::Run(
+        table_executor,
+        [ctx = std::move(ctx),
+         &table,
+         output = std::move(output),
+         writer_options = std::move(writer_options),
+         format_driver,
+         scheduler_options,
+         &part_executor]() mutable -> int {
+            return GenerateTableWithStrategy(ctx, table, output, writer_options, *format_driver, scheduler_options, part_executor);
+        });
 }
 }
 
@@ -346,6 +359,19 @@ int main(int argc, char ** argv)
         selected_tables.push_back(metadata);
     }
 
+    /*
+     * Longest-processing-time (LPT) ordering: schedule the biggest tables
+     * first so they keep workers busy as small tables (region, nation,
+     * supplier) drain quickly. This reduces makespan when several tables
+     * are generated together.
+     */
+    std::stable_sort(
+        selected_tables.begin(),
+        selected_tables.end(),
+        [&scale](const TableMetadata * lhs, const TableMetadata * rhs) {
+            return scale.RowCount(*lhs) > scale.RowCount(*rhs);
+        });
+
     std::unique_ptr<CliProgressController> progress_controller;
     if (verbosity == CliVerbosity::Verbose)
     {
@@ -370,8 +396,11 @@ int main(int argc, char ** argv)
         progress_controller = std::make_unique<CliProgressController>(std::move(progress_tables), std::move(progress_options));
     }
 
-    std::vector<yaclib::FutureOn<int>> table_futures;
-    table_futures.reserve(selected_tables.size() * format_selections.size());
+    int exit_code = 0;
+    std::size_t global_task_index = 0;
+    std::vector<std::pair<std::size_t, yaclib::FutureOn<int>>> table_futures;
+    table_futures.reserve(format_selections.size() * selected_tables.size());
+
     for (std::size_t format_index = 0; format_index < format_selections.size(); ++format_index)
     {
         const auto & format = format_selections[format_index];
@@ -380,22 +409,24 @@ int main(int argc, char ** argv)
             GenerationContext table_ctx = ctx;
             table_ctx.progress = progress_controller.get();
             table_ctx.progress_table_index = format_index * selected_tables.size() + table_index;
-            table_futures.emplace_back(LaunchTableTask(
-                *table_executor,
-                table_ctx,
-                *selected_tables[table_index],
-                format.output,
-                format.writer_options,
-                format.driver,
-                scheduler_options,
-                *part_executor));
+            table_futures.emplace_back(
+                global_task_index,
+                LaunchTableTask(
+                    *table_executor,
+                    std::move(table_ctx),
+                    *selected_tables[table_index],
+                    format.output,
+                    format.writer_options,
+                    format.driver,
+                    scheduler_options,
+                    *part_executor));
+            ++global_task_index;
         }
     }
 
-    int exit_code = 0;
-    for (std::size_t table_index = 0; table_index < table_futures.size(); ++table_index)
+    for (auto & [task_index, future] : table_futures)
     {
-        auto result = std::move(table_futures[table_index]).Get();
+        auto result = std::move(future).Get();
         try
         {
             const int code = std::move(result).Ok();
@@ -409,7 +440,7 @@ int main(int argc, char ** argv)
             const std::string message = "Table task failed: " + std::string(ex.what());
             if (progress_controller)
             {
-                progress_controller->ReportFailure(table_index, message);
+                progress_controller->ReportFailure(task_index, message);
             }
             else
             {
