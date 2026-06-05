@@ -8,8 +8,8 @@ rust-version = "1.91"
 crate-type = ["staticlib"]
 
 [dependencies]
-arrow-array = "57.0.0"
-arrow-data = "57.0.0"
-arrow-schema = "57.0.0"
+arrow-array = { version = "58", features = ["ffi"] }
+arrow-data = "58"
+arrow-schema = { version = "58", features = ["ffi"] }
 lance = { path = "../../lance/rust/lance" }
 tokio = { version = "1", features = ["rt", "sync"] }

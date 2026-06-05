@@ -19,7 +19,7 @@ use object_store::client::SpawnedReqwestConnector;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectStorePath;
-use object_store::{ObjectStore, ObjectStoreScheme};
+use object_store::{ObjectStore, ObjectStoreExt, ObjectStoreScheme};
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime as TokioRuntime};
 use url::Url;
 use vortex::VortexSessionDefault;

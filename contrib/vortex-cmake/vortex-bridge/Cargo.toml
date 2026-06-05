@@ -8,11 +8,11 @@ rust-version = "1.90"
 crate-type = ["staticlib"]
 
 [dependencies]
-arrow-array = "57.1"
-arrow-schema = "57.1"
+arrow-array = { version = "58", features = ["ffi"] }
+arrow-schema = { version = "58", features = ["ffi"] }
 async-fs = "2.2.0"
 futures = "0.3.31"
-object_store = { version = "0.12.4", default-features = false, features = ["aws", "azure", "gcp"] }
+object_store = { version = "0.13.1", default-features = false, features = ["aws", "azure", "gcp"] }
 tokio = { version = "1", features = ["net", "rt-multi-thread", "time"] }
 url = "2.5.7"
 vortex = { path = "../../vortex/vortex", features = ["object_store"] }
