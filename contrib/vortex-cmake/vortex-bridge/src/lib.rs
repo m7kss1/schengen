@@ -310,6 +310,18 @@ fn write_batches(
     receiver: Receiver<ArrayRef>,
 ) -> Result<(), String> {
     let runtime = CurrentThreadRuntime::new();
+
+    // Drive Vortex's spawn_cpu compression tasks across all cores. The pool shares the
+    // runtime's executor, so CompressingStrategy's `.buffered(concurrency)` chunks compress
+    // in parallel while the main write future and the sync file sink stay on this thread.
+    // Output ordering is preserved by Vortex (sequence IDs + buffered()). The pool must
+    // outlive block_on; its Drop signals the workers to stop.
+    let _pool = {
+        let pool = runtime.new_pool();
+        pool.set_workers_to_available_parallelism();
+        pool
+    };
+
     let session = session_for_runtime(&runtime);
 
     runtime.block_on(async move {
